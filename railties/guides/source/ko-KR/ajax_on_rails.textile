@@ -1,16 +1,16 @@
-h2. AJAX on Rails
+h2. 레일즈에서 AJAX 구현하기
 
-This guide covers the built-in Ajax/JavaScript functionality of Rails (and more); it will enable you to create rich and dynamic AJAX applications with ease! We will cover the following topics:
+이 안내서에서는 레일즈에 내장된 Ajax/자바스크립트 기능(뿐만 아니라 더 많은 것을) 다루게 됩니다: 이것을 이용하면 기능이 다양하고 동적인 AJAX 어플리케이션을 쉽게 만들 수 있습니다. 여기서 다루게 될 주제들은 다음과 같습니다:
 
-* Quick introduction to AJAX and related technologies
-* Handling JavaScript the Rails way: Rails helpers, RJS, Prototype and script.aculo.us
-* Testing JavaScript functionality
+* AJAX와 관련 기술들에 대한 신속한 소개
+* 레일즈 방식으로 자바스크립트 다루기 : 레일즈 헬퍼, RJS, Prototype and script.aculo.us
+* 자바스크립트 기능 테스트하기
 
 endprologue.
 
-h3. Hello AJAX - a Quick Intro
+h3. Hello AJAX - 신속한 소개
 
-If you are a 'show me the code' type of person, you might want to skip this part and jump to the RJS section right away. However, I would really recommend to read it - you'll need the basics of DOM, http requests and other topics discussed here to really understand Ajax on Rails.
+'show me the code'형의 사람이라면 이 부분을 건너띠고 바로 RJS 부분으로 이동하기를 원할 수 있습니다. 그러나, 이 부분을 읽을 것을 정말로 권하고 싶습니다. 레일스에서 Ajax를 잘 이해하기 위해서는 여기서 언급되는 DOM의 기본개념과 http 요청에 관한 사항, 그리고 기타 다른 주제들에 대한 이해가 필요할 것이기 때문입니다. 
 
 h4. Asynchronous JavaScript + XML
 
