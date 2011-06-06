@@ -1,5 +1,6 @@
 require 'active_support/core_ext/hash/slice'
 require "rails/generators/rails/app/app_generator"
+require 'date'
 
 module Rails
   class PluginBuilder
@@ -8,10 +9,17 @@ module Rails
     end
 
     def app
-      if options[:mountable]
+      if mountable?
         directory "app"
         template "#{app_templates_dir}/app/views/layouts/application.html.erb.tt",
                  "app/views/layouts/#{name}/application.html.erb"
+        empty_directory_with_gitkeep "app/assets/images"
+      elsif full?
+        empty_directory_with_gitkeep "app/models"
+        empty_directory_with_gitkeep "app/controllers"
+        empty_directory_with_gitkeep "app/views"
+        empty_directory_with_gitkeep "app/helpers"
+        empty_directory_with_gitkeep "app/assets/images"
       end
     end
 
@@ -60,9 +68,14 @@ task :default => :test
       end
     end
 
+    PASSTHROUGH_OPTIONS = [
+      :skip_active_record, :skip_javascript, :database, :javascript, :quiet, :pretend, :force, :skip
+    ]
+
     def generate_test_dummy(force = false)
-      opts = (options || {}).slice(:skip_active_record, :skip_javascript, :database, :javascript)
+      opts = (options || {}).slice(*PASSTHROUGH_OPTIONS)
       opts[:force] = force
+      opts[:skip_bundle] = true
 
       invoke Rails::Generators::AppGenerator,
         [ File.expand_path(dummy_path, destination_root) ], opts
@@ -83,7 +96,7 @@ task :default => :test
         remove_file "doc"
         remove_file "Gemfile"
         remove_file "lib/tasks"
-        remove_file "public/images/rails.png"
+        remove_file "app/assets/images/rails.png"
         remove_file "public/index.html"
         remove_file "public/robots.txt"
         remove_file "README"
@@ -93,26 +106,23 @@ task :default => :test
     end
 
     def stylesheets
-      empty_directory_with_gitkeep "public/stylesheets" if options[:mountable]
+      if mountable?
+        copy_file "#{app_templates_dir}/app/assets/stylesheets/application.css",
+                  "app/assets/stylesheets/application.css"
+      elsif full?
+        empty_directory_with_gitkeep "app/assets/stylesheets"
+      end
     end
 
     def javascripts
-      return unless options[:mountable]
+      return if options.skip_javascript?
 
-      empty_directory "#{app_templates_dir}/public/javascripts"
-
-      unless options[:skip_javascript]
-        copy_file "#{app_templates_dir}/public/javascripts/#{options[:javascript]}.js", "public/javascripts/#{options[:javascript]}.js"
-        copy_file "#{app_templates_dir}/public/javascripts/#{options[:javascript]}_ujs.js", "public/javascripts/rails.js"
-
-        if options[:javascript] == "prototype"
-          copy_file "#{app_templates_dir}/public/javascripts/controls.js", "public/javascripts/controls.js"
-          copy_file "#{app_templates_dir}/public/javascripts/dragdrop.js", "public/javascripts/dragdrop.js"
-          copy_file "#{app_templates_dir}/public/javascripts/effects.js", "public/javascripts/effects.js"
-        end
+      if mountable?
+        copy_file "#{app_templates_dir}/app/assets/javascripts/application.js.tt",
+                  "app/assets/javascripts/application.js"
+      elsif full?
+        empty_directory_with_gitkeep "app/assets/javascripts"
       end
-
-      copy_file "#{app_templates_dir}/public/javascripts/application.js", "public/javascripts/application.js"
     end
 
     def script(force = false)
@@ -129,21 +139,22 @@ task :default => :test
 
       alias_method :plugin_path, :app_path
 
-      class_option :dummy_path,     :type => :string, :default => "test/dummy",
-                                    :desc => "Create dummy application at given path"
+      class_option :dummy_path,   :type => :string, :default => "test/dummy",
+                                  :desc => "Create dummy application at given path"
 
-      class_option :full,           :type => :boolean, :default => false,
-                                    :desc => "Generate rails engine with integration tests"
+      class_option :full,         :type => :boolean, :default => false,
+                                  :desc => "Generate rails engine with integration tests"
 
-      class_option :mountable,      :type => :boolean, :default => false,
-                                    :desc => "Generate mountable isolated application"
+      class_option :mountable,    :type => :boolean, :default => false,
+                                  :desc => "Generate mountable isolated application"
 
-      class_option :skip_gemspec,   :type => :boolean, :default => false,
-                                    :desc => "Skip gemspec file"
+      class_option :skip_gemspec, :type => :boolean, :default => false,
+                                  :desc => "Skip gemspec file"
 
       def initialize(*args)
         raise Error, "Options should be given after the plugin name. For details run: rails plugin --help" if args[0].blank?
 
+        @dummy_path = nil
         super
       end
 
@@ -178,6 +189,10 @@ task :default => :test
         build(:javascripts)
       end
 
+      def create_images_directory
+        build(:images)
+      end
+
       def create_script_files
         build(:script)
       end
@@ -187,7 +202,7 @@ task :default => :test
       end
 
       def create_test_dummy_files
-        return if options[:skip_test_unit]
+        return if options[:skip_test_unit] && options[:dummy_path] == 'test/dummy'
         create_dummy_app
       end
 
@@ -195,9 +210,10 @@ task :default => :test
         build(:leftovers)
       end
 
-      public_task :apply_rails_template, :bundle_if_dev_or_edge
+      public_task :apply_rails_template, :run_bundle
 
     protected
+
       def app_templates_dir
         "../../app/templates"
       end

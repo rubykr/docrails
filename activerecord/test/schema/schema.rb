@@ -40,6 +40,10 @@ ActiveRecord::Schema.define do
     t.references :account
   end
 
+  create_table :aircraft, :force => true do |t|
+    t.string :name
+  end
+
   create_table :audit_logs, :force => true do |t|
     t.column :message, :string, :null=>false
     t.column :developer_id, :integer, :null=>false
@@ -49,6 +53,8 @@ ActiveRecord::Schema.define do
     t.string :name, :null => false
     t.integer :author_address_id
     t.integer :author_address_extra_id
+    t.string :organization_id
+    t.string :owned_essay_id
   end
 
   create_table :author_addresses, :force => true do |t|
@@ -65,6 +71,7 @@ ActiveRecord::Schema.define do
   end
 
   create_table :binaries, :force => true do |t|
+    t.string :name
     t.binary :data
   end
 
@@ -75,6 +82,7 @@ ActiveRecord::Schema.define do
   end
 
   create_table :books, :force => true do |t|
+    t.integer :author_id
     t.column :name, :string
   end
 
@@ -85,6 +93,8 @@ ActiveRecord::Schema.define do
   create_table :bulbs, :force => true do |t|
     t.integer :car_id
     t.string  :name
+    t.boolean :frickinawesome
+    t.string :color
   end
 
   create_table "CamelCase", :force => true do |t|
@@ -123,6 +133,7 @@ ActiveRecord::Schema.define do
 
   create_table :clubs, :force => true do |t|
     t.string :name
+    t.integer :category_id
   end
 
   create_table :collections, :force => true do |t|
@@ -216,6 +227,8 @@ ActiveRecord::Schema.define do
     t.string :name
     t.string :writer_id
     t.string :writer_type
+    t.string :category_id
+    t.string :author_id
   end
 
   create_table :events, :force => true do |t|
@@ -393,6 +406,7 @@ ActiveRecord::Schema.define do
     t.string :name
     t.column :updated_at, :datetime
     t.column :happy_at,   :datetime
+    t.string :essay_id
   end
 
   create_table :paint_colors, :force => true do |t|
@@ -430,6 +444,8 @@ ActiveRecord::Schema.define do
     t.references :number1_fan
     t.integer    :lock_version, :null => false, :default => 0
     t.string     :comments
+    t.references :best_friend
+    t.references :best_friend_of
     t.timestamps
   end
 
@@ -482,6 +498,11 @@ ActiveRecord::Schema.define do
     t.string :type
   end
 
+  create_table :ratings, :force => true do |t|
+    t.integer :comment_id
+    t.integer :value
+  end
+
   create_table :readers, :force => true do |t|
     t.integer :post_id, :null => false
     t.integer :person_id, :null => false
@@ -528,6 +549,12 @@ ActiveRecord::Schema.define do
     t.string :sponsorable_type
   end
 
+  create_table :string_key_objects, :id => false, :primary_key => :id, :force => true do |t|
+    t.string     :id
+    t.string     :name
+    t.integer    :lock_version, :null => false, :default => 0
+  end
+
   create_table :students, :force => true do |t|
     t.string :name
   end
@@ -553,6 +580,7 @@ ActiveRecord::Schema.define do
     t.column :super_tag_id, :integer
     t.column :taggable_type, :string
     t.column :taggable_id, :integer
+    t.string :comment
   end
 
   create_table :tasks, :force => true do |t|
@@ -676,6 +704,9 @@ ActiveRecord::Schema.define do
   create_table :electrons, :force => true do |t|
     t.integer :molecule_id
     t.string :name
+  end
+  create_table :weirds, :force => true do |t|
+    t.string 'a$b'
   end
 
   except 'SQLite' do

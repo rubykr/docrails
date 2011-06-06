@@ -105,7 +105,7 @@ module ActionController
   # == Renders
   #
   # Action Controller sends content to the user by using one of five rendering methods. The most versatile and common is the rendering
-  # of a template. Included in the Action Pack is the Action View, which enables rendering of ERb templates. It's automatically configured.
+  # of a template. Included in the Action Pack is the Action View, which enables rendering of ERB templates. It's automatically configured.
   # The controller passes objects to the view by assigning instance variables:
   #
   #   def show
@@ -128,7 +128,7 @@ module ActionController
   #     end
   #   end
   #
-  # Read more about writing ERb and Builder templates in ActionView::Base.
+  # Read more about writing ERB and Builder templates in ActionView::Base.
   #
   # == Redirects
   #
@@ -198,19 +198,25 @@ module ActionController
       Cookies,
       Flash,
       RequestForgeryProtection,
+      ForceSSL,
       Streaming,
+      DataStreaming,
       RecordIdentifier,
       HttpAuthentication::Basic::ControllerMethods,
       HttpAuthentication::Digest::ControllerMethods,
       HttpAuthentication::Token::ControllerMethods,
 
+      # Before callbacks should also be executed the earliest as possible, so
+      # also include them at the bottom.
+      AbstractController::Callbacks,
+
       # Add instrumentations hooks at the bottom, to ensure they instrument
       # all the methods properly.
       Instrumentation,
 
-      # Before callbacks should also be executed the earliest as possible, so
-      # also include them at the bottom.
-      AbstractController::Callbacks,
+      # Params wrapper should come before instrumentation so they are
+      # properly showed in logs
+      ParamsWrapper,
 
       # The same with rescue, append it at the end to wrap as much as possible.
       Rescue

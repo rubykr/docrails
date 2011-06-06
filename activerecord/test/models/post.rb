@@ -7,6 +7,7 @@ class Post < ActiveRecord::Base
 
   scope :containing_the_letter_a, where("body LIKE '%a%'")
   scope :ranked_by_comments, order("comments_count DESC")
+
   scope :limit_by, lambda {|l| limit(l) }
   scope :with_authors_at_address, lambda { |address| {
       :conditions => [ 'authors.author_address_id = ?', address.id ],
@@ -49,6 +50,9 @@ class Post < ActiveRecord::Base
   has_many :special_comments
   has_many :nonexistant_comments, :class_name => 'Comment', :conditions => 'comments.id < 0'
 
+  has_many :special_comments_ratings, :through => :special_comments, :source => :ratings
+  has_many :special_comments_ratings_taggings, :through => :special_comments_ratings, :source => :taggings
+
   has_and_belongs_to_many :categories
   has_and_belongs_to_many :special_categories, :join_table => "categories_posts", :association_foreign_key => 'category_id'
 
@@ -70,10 +74,16 @@ class Post < ActiveRecord::Base
   has_many :tags_with_destroy, :through => :taggings, :source => :tag, :dependent => :destroy
   has_many :tags_with_nullify, :through => :taggings, :source => :tag, :dependent => :nullify
 
-  has_many :misc_tags, :through => :taggings, :source => :tag, :conditions => "tags.name = 'Misc'"
+  has_many :misc_tags, :through => :taggings, :source => :tag, :conditions => { :tags => { :name => 'Misc' } }
   has_many :funky_tags, :through => :taggings, :source => :tag
   has_many :super_tags, :through => :taggings
+  has_many :tags_with_primary_key, :through => :taggings, :source => :tag_with_primary_key
   has_one :tagging, :as => :taggable
+
+  has_many :first_taggings, :as => :taggable, :class_name => 'Tagging', :conditions => { :taggings => { :comment => 'first' } }
+  has_many :first_blue_tags, :through => :first_taggings, :source => :tag, :conditions => { :tags => { :name => 'Blue' } }
+
+  has_many :first_blue_tags_2, :through => :taggings, :source => :blue_tag, :conditions => { :taggings => { :comment => 'first' } }
 
   has_many :invalid_taggings, :as => :taggable, :class_name => "Tagging", :conditions => 'taggings.id < 0'
   has_many :invalid_tags, :through => :invalid_taggings, :source => :tag
@@ -133,20 +143,28 @@ class SubStiPost < StiPost
   self.table_name = Post.table_name
 end
 
-class PostWithComment < ActiveRecord::Base
-  self.table_name = 'posts'
-  default_scope where("posts.comments_count > 0").order("posts.comments_count ASC")
+ActiveSupport::Deprecation.silence do
+  class DeprecatedPostWithComment < ActiveRecord::Base
+    self.table_name = 'posts'
+    default_scope where("posts.comments_count > 0").order("posts.comments_count ASC")
+  end
 end
 
 class PostForAuthor < ActiveRecord::Base
   self.table_name = 'posts'
   cattr_accessor :selected_author
-  default_scope lambda { where(:author_id => PostForAuthor.selected_author) }
 end
 
 class FirstPost < ActiveRecord::Base
   self.table_name = 'posts'
   default_scope where(:id => 1)
+
   has_many :comments, :foreign_key => :post_id
   has_one  :comment,  :foreign_key => :post_id
+end
+
+class PostWithDefaultInclude < ActiveRecord::Base
+  self.table_name = 'posts'
+  default_scope includes(:comments)
+  has_many :comments, :foreign_key => :post_id
 end

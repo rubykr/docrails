@@ -5,14 +5,14 @@ module ActiveRecord
         table = default_table
 
         if value.is_a?(Hash)
-          table = Arel::Table.new(column, :engine => engine)
+          table = Arel::Table.new(column, engine)
           build_from_hash(engine, value, table)
         else
           column = column.to_s
 
           if column.include?('.')
             table_name, column = column.split('.', 2)
-            table = Arel::Table.new(table_name, :engine => engine)
+            table = Arel::Table.new(table_name, engine)
           end
 
           attribute = table[column.to_sym]
@@ -25,7 +25,18 @@ module ActiveRecord
             values = value.to_a.map { |x|
               x.is_a?(ActiveRecord::Base) ? x.id : x
             }
-            attribute.in(values)
+
+            if values.include?(nil)
+              values = values.compact
+              if values.empty?
+                attribute.eq nil
+              else
+                attribute.in(values.compact).or attribute.eq(nil)
+              end
+            else
+              attribute.in(values)
+            end
+
           when Range, Arel::Relation
             attribute.in(value)
           when ActiveRecord::Base

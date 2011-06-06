@@ -7,8 +7,9 @@ module ActiveModel
     attr_reader :singular, :plural, :element, :collection, :partial_path, :route_key, :param_key, :i18n_key
     alias_method :cache_key, :collection
 
-    def initialize(klass, namespace = nil)
-      super(klass.name)
+    def initialize(klass, namespace = nil, name = nil)
+      name ||= klass.name
+      super(name)
       @unnamespaced = self.sub(/^#{namespace.name}::/, '') if namespace
 
       @klass = klass
@@ -20,7 +21,7 @@ module ActiveModel
       @partial_path = "#{@collection}/#{@element}".freeze
       @param_key = (namespace ? _singularize(@unnamespaced) : @singular).freeze
       @route_key = (namespace ? ActiveSupport::Inflector.pluralize(@param_key) : @plural).freeze
-      @i18n_key = _singularize(self, '.').to_sym
+      @i18n_key = self.underscore.to_sym
     end
 
     # Transform the model name into a more humane format, using I18n. By default,
@@ -68,7 +69,7 @@ module ActiveModel
   #   BookModule::BookCover.model_name.i18n_key  # => "book_module.book_cover"
   #
   # Providing the functionality that ActiveModel::Naming provides in your object
-  # is required to pass the Active Model Lint test.  So either extending the provided
+  # is required to pass the Active Model Lint test. So either extending the provided
   # method below, or rolling your own is required.
   module Naming
     # Returns an ActiveModel::Name object for module. It can be

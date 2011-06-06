@@ -22,14 +22,14 @@ module ActionDispatch
     end
 
     def cookies
-      HashWithIndifferentAccess.new(@request.cookies.merge(@response.cookies))
+      @request.cookies.merge(@response.cookies).with_indifferent_access
     end
 
     def redirect_to_url
       @response.redirect_url
     end
 
-    # Shortcut for <tt>ARack::Test::UploadedFile.new(ActionController::TestCase.fixture_path + path, type)</tt>:
+    # Shortcut for <tt>Rack::Test::UploadedFile.new(ActionController::TestCase.fixture_path + path, type)</tt>:
     #
     #   post :change_avatar, :avatar => fixture_file_upload('/files/spongebob.png', 'image/png')
     #

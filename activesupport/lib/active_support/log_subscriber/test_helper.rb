@@ -1,5 +1,6 @@
 require 'active_support/log_subscriber'
 require 'active_support/buffered_logger'
+require 'active_support/notifications'
 
 module ActiveSupport
   class LogSubscriber
@@ -23,11 +24,11 @@ module ActiveSupport
     #   end
     #
     # All you need to do is to ensure that your log subscriber is added to Rails::Subscriber,
-    # as in the second line of the code above. The test helpers is reponsible for setting
+    # as in the second line of the code above. The test helpers are responsible for setting
     # up the queue, subscriptions and turning colors in logs off.
     #
     # The messages are available in the @logger instance, which is a logger with limited
-    # powers (it actually do not send anything to your output), and you can collect them
+    # powers (it actually does not send anything to your output), and you can collect them
     # doing @logger.logged(level), where level is the level used in logging, like info,
     # debug, warn and so on.
     #

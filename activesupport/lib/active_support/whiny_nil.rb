@@ -37,11 +37,11 @@ class NilClass
 
   # Raises a RuntimeError when you attempt to call +id+ on +nil+.
   def id
-    raise RuntimeError, "Called id for nil, which would mistakenly be 4 -- if you really wanted the id of nil, use object_id", caller
+    raise RuntimeError, "Called id for nil, which would mistakenly be #{object_id} -- if you really wanted the id of nil, use object_id", caller
   end
 
   private
-    def method_missing(method, *args, &block)
+    def method_missing(method, *args)
       if klass = METHOD_CLASS_MAP[method]
         raise_nil_warning_for klass, method, caller
       else

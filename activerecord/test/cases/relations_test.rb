@@ -151,6 +151,12 @@ class RelationTest < ActiveRecord::TestCase
     assert_equal topics(:fourth).title, topics.first.title
   end
 
+  def test_finding_with_reorder
+    topics = Topic.order('author_name').order('title').reorder('id').all
+    topics_titles = topics.map{ |t| t.title }
+    assert_equal ['The First Topic', 'The Second Topic of the day', 'The Third Topic of the day', 'The Fourth Topic of the day'], topics_titles
+  end
+
   def test_finding_with_order_and_take
     entrants = Entrant.order("id ASC").limit(2).to_a
 
@@ -165,7 +171,7 @@ class RelationTest < ActiveRecord::TestCase
 
   def test_finding_with_complex_order
     tags = Tag.includes(:taggings).order("REPLACE('abc', taggings.taggable_type, taggings.taggable_type)").to_a
-    assert_equal 2, tags.length
+    assert_equal 3, tags.length
   end
 
   def test_finding_with_order_limit_and_offset
@@ -281,27 +287,27 @@ class RelationTest < ActiveRecord::TestCase
 
   def test_find_with_preloaded_associations
     assert_queries(2) do
-      posts = Post.preload(:comments)
+      posts = Post.preload(:comments).order('posts.id')
       assert posts.first.comments.first
     end
 
     assert_queries(ActiveRecord::IdentityMap.enabled? ? 1 : 2) do
-      posts = Post.preload(:comments).to_a
+      posts = Post.preload(:comments).order('posts.id')
       assert posts.first.comments.first
     end
 
     assert_queries(2) do
-      posts = Post.preload(:author)
+      posts = Post.preload(:author).order('posts.id')
       assert posts.first.author
     end
 
     assert_queries(ActiveRecord::IdentityMap.enabled? ? 1 : 2) do
-      posts = Post.preload(:author).to_a
+      posts = Post.preload(:author).order('posts.id')
       assert posts.first.author
     end
 
     assert_queries(ActiveRecord::IdentityMap.enabled? ? 1 : 3) do
-      posts = Post.preload(:author, :comments).to_a
+      posts = Post.preload(:author, :comments).order('posts.id')
       assert posts.first.author
       assert posts.first.comments.first
     end
@@ -309,22 +315,22 @@ class RelationTest < ActiveRecord::TestCase
 
   def test_find_with_included_associations
     assert_queries(2) do
-      posts = Post.includes(:comments)
+      posts = Post.includes(:comments).order('posts.id')
       assert posts.first.comments.first
     end
 
     assert_queries(ActiveRecord::IdentityMap.enabled? ? 1 : 2) do
-      posts = Post.scoped.includes(:comments)
+      posts = Post.scoped.includes(:comments).order('posts.id')
       assert posts.first.comments.first
     end
 
     assert_queries(2) do
-      posts = Post.includes(:author)
+      posts = Post.includes(:author).order('posts.id')
       assert posts.first.author
     end
 
     assert_queries(ActiveRecord::IdentityMap.enabled? ? 1 : 3) do
-      posts = Post.includes(:author, :comments).to_a
+      posts = Post.includes(:author, :comments).order('posts.id')
       assert posts.first.author
       assert posts.first.comments.first
     end
@@ -538,7 +544,7 @@ class RelationTest < ActiveRecord::TestCase
 
   def test_last
     authors = Author.scoped
-    assert_equal authors(:mary), authors.last
+    assert_equal authors(:bob), authors.last
   end
 
   def test_destroy_all
@@ -618,22 +624,22 @@ class RelationTest < ActiveRecord::TestCase
   def test_count
     posts = Post.scoped
 
-    assert_equal 7, posts.count
-    assert_equal 7, posts.count(:all)
-    assert_equal 7, posts.count(:id)
+    assert_equal 11, posts.count
+    assert_equal 11, posts.count(:all)
+    assert_equal 11, posts.count(:id)
 
     assert_equal 1, posts.where('comments_count > 1').count
-    assert_equal 5, posts.where(:comments_count => 0).count
+    assert_equal 9, posts.where(:comments_count => 0).count
   end
 
   def test_count_with_distinct
     posts = Post.scoped
 
     assert_equal 3, posts.count(:comments_count, :distinct => true)
-    assert_equal 7, posts.count(:comments_count, :distinct => false)
+    assert_equal 11, posts.count(:comments_count, :distinct => false)
 
     assert_equal 3, posts.select(:comments_count).count(:distinct => true)
-    assert_equal 7, posts.select(:comments_count).count(:distinct => false)
+    assert_equal 11, posts.select(:comments_count).count(:distinct => false)
   end
 
   def test_count_explicit_columns
@@ -643,7 +649,7 @@ class RelationTest < ActiveRecord::TestCase
     assert_equal [0], posts.select('comments_count').where('id is not null').group('id').order('id').count.values.uniq
     assert_equal 0, posts.where('id is not null').select('comments_count').count
 
-    assert_equal 7, posts.select('comments_count').count('id')
+    assert_equal 11, posts.select('comments_count').count('id')
     assert_equal 0, posts.select('comments_count').count
     assert_equal 0, posts.count(:comments_count)
     assert_equal 0, posts.count('comments_count')
@@ -658,12 +664,40 @@ class RelationTest < ActiveRecord::TestCase
   def test_size
     posts = Post.scoped
 
-    assert_queries(1) { assert_equal 7, posts.size }
+    assert_queries(1) { assert_equal 11, posts.size }
     assert ! posts.loaded?
 
     best_posts = posts.where(:comments_count => 0)
     best_posts.to_a # force load
-    assert_no_queries { assert_equal 5, best_posts.size }
+    assert_no_queries { assert_equal 9, best_posts.size }
+  end
+
+  def test_size_with_limit
+    posts = Post.limit(10)
+
+    assert_queries(1) { assert_equal 10, posts.size }
+    assert ! posts.loaded?
+
+    best_posts = posts.where(:comments_count => 0)
+    best_posts.to_a # force load
+    assert_no_queries { assert_equal 9, best_posts.size }
+  end
+
+  def test_size_with_zero_limit
+    posts = Post.limit(0)
+
+    assert_no_queries { assert_equal 0, posts.size }
+    assert ! posts.loaded?
+
+    posts.to_a # force load
+    assert_no_queries { assert_equal 0, posts.size }
+  end
+
+  def test_empty_with_zero_limit
+    posts = Post.limit(0)
+
+    assert_no_queries { assert_equal true, posts.empty? }
+    assert ! posts.loaded?
   end
 
   def test_count_complex_chained_relations
@@ -671,6 +705,32 @@ class RelationTest < ActiveRecord::TestCase
 
     expected = { 1 => 2 }
     assert_equal expected, posts.count
+  end
+
+  def test_empty
+    posts = Post.scoped
+
+    assert_queries(1) { assert_equal false, posts.empty? }
+    assert ! posts.loaded?
+
+    no_posts = posts.where(:title => "")
+    assert_queries(1) { assert_equal true, no_posts.empty? }
+    assert ! no_posts.loaded?
+
+    best_posts = posts.where(:comments_count => 0)
+    best_posts.to_a # force load
+    assert_no_queries { assert_equal false, best_posts.empty? }
+  end
+
+  def test_empty_complex_chained_relations
+    posts = Post.select("comments_count").where("id is not null").group("author_id").where("comments_count > 0")
+
+    assert_queries(1) { assert_equal false, posts.empty? }
+    assert ! posts.loaded?
+
+    no_posts = posts.where(:title => "")
+    assert_queries(1) { assert_equal true, no_posts.empty? }
+    assert ! no_posts.loaded?
   end
 
   def test_any
@@ -771,6 +831,10 @@ class RelationTest < ActiveRecord::TestCase
     assert_equal Post.all, all_posts.all
   end
 
+  def test_extensions_with_except
+    assert_equal 2, Topic.named_extension.order(:author_name).except(:order).two
+  end
+
   def test_only
     relation = Post.where(:author_id => 1).order('id ASC').limit(1)
     assert_equal [posts(:welcome)], relation.all
@@ -780,6 +844,10 @@ class RelationTest < ActiveRecord::TestCase
 
     all_posts = relation.only(:limit)
     assert_equal Post.limit(1).all.first, all_posts.first
+  end
+
+  def test_extensions_with_only
+    assert_equal 2, Topic.named_extension.order(:author_name).only(:order).two
   end
 
   def test_anonymous_extension
@@ -849,5 +917,20 @@ class RelationTest < ActiveRecord::TestCase
 
   def test_primary_key
     assert_equal "id", Post.scoped.primary_key
+  end
+
+  def test_eager_loading_with_conditions_on_joins
+    scope = Post.includes(:comments)
+
+    # This references the comments table, and so it should cause the comments to be eager
+    # loaded via a JOIN, rather than by subsequent queries.
+    scope = scope.joins(
+      Post.arel_table.create_join(
+        Post.arel_table,
+        Post.arel_table.create_on(Comment.arel_table[:id].eq(3))
+      )
+    )
+
+    assert scope.eager_loading?
   end
 end

@@ -1,20 +1,10 @@
-require 'active_support/core_ext/module/deprecation'
-
 module ActiveRecord
   module ConnectionAdapters # :nodoc:
     module DatabaseStatements
       # Returns an array of record hashes with the column names as keys and
       # column values as values.
       def select_all(sql, name = nil, binds = [])
-        if supports_statement_cache?
-          select(sql, name, binds)
-        else
-          return select(sql, name) if binds.empty?
-          binds = binds.dup
-          select sql.gsub('?') {
-            quote(*binds.shift.reverse)
-          }, name
-        end
+        select(sql, name, binds)
       end
 
       # Returns a record hash with the column names as keys and column values
@@ -50,24 +40,54 @@ module ActiveRecord
       undef_method :execute
 
       # Executes +sql+ statement in the context of this connection using
-      # +binds+ as the bind substitutes.  +name+ is logged along with
+      # +binds+ as the bind substitutes. +name+ is logged along with
       # the executed +sql+ statement.
       def exec_query(sql, name = 'SQL', binds = [])
       end
 
+      # Executes insert +sql+ statement in the context of this connection using
+      # +binds+ as the bind substitutes. +name+ is the logged along with
+      # the executed +sql+ statement.
+      def exec_insert(sql, name, binds)
+        exec_query(sql, name, binds)
+      end
+
+      # Executes delete +sql+ statement in the context of this connection using
+      # +binds+ as the bind substitutes. +name+ is the logged along with
+      # the executed +sql+ statement.
+      def exec_delete(sql, name, binds)
+        exec_query(sql, name, binds)
+      end
+
+      # Executes update +sql+ statement in the context of this connection using
+      # +binds+ as the bind substitutes. +name+ is the logged along with
+      # the executed +sql+ statement.
+      def exec_update(sql, name, binds)
+        exec_query(sql, name, binds)
+      end
+
       # Returns the last auto-generated ID from the affected table.
-      def insert(sql, name = nil, pk = nil, id_value = nil, sequence_name = nil)
-        insert_sql(sql, name, pk, id_value, sequence_name)
+      #
+      # +id_value+ will be returned unless the value is nil, in
+      # which case the database will attempt to calculate the last inserted
+      # id and return that value.
+      #
+      # If the next id was calculated in advance (as in Oracle), it should be
+      # passed in as +id_value+.
+      def insert(sql, name = nil, pk = nil, id_value = nil, sequence_name = nil, binds = [])
+        sql, binds = sql_for_insert(sql, pk, id_value, sequence_name, binds)
+        value      = exec_insert(sql, name, binds)
+        id_value || last_inserted_id(value)
       end
 
       # Executes the update statement and returns the number of rows affected.
-      def update(sql, name = nil)
-        update_sql(sql, name)
+      def update(sql, name = nil, binds = [])
+        exec_update(sql, name, binds)
       end
 
       # Executes the delete statement and returns the number of rows affected.
-      def delete(sql, name = nil)
-        delete_sql(sql, name)
+      def delete(sql, name = nil, binds = [])
+        exec_delete(sql, name, binds)
       end
 
       # Checks whether there is currently no transaction active. This is done
@@ -223,39 +243,13 @@ module ActiveRecord
       # done if the transaction block raises an exception or returns false.
       def rollback_db_transaction() end
 
-      # Appends +LIMIT+ and +OFFSET+ options to an SQL statement, or some SQL
-      # fragment that has the same semantics as LIMIT and OFFSET.
-      #
-      # +options+ must be a Hash which contains a +:limit+ option
-      # and an +:offset+ option.
-      #
-      # This method *modifies* the +sql+ parameter.
-      #
-      # This method is deprecated!! Stop using it!
-      #
-      # ===== Examples
-      #  add_limit_offset!('SELECT * FROM suppliers', {:limit => 10, :offset => 50})
-      # generates
-      #  SELECT * FROM suppliers LIMIT 10 OFFSET 50
-
-      def add_limit_offset!(sql, options)
-        if limit = options[:limit]
-          sql << " LIMIT #{sanitize_limit(limit)}"
-        end
-        if offset = options[:offset]
-          sql << " OFFSET #{offset.to_i}"
-        end
-        sql
-      end
-      deprecate :add_limit_offset!
-
       def default_sequence_name(table, column)
         nil
       end
 
       # Set the sequence to the max value of the table's column.
       def reset_sequence!(table, column, sequence = nil)
-        # Do nothing by default.  Implement for PostgreSQL, Oracle, ...
+        # Do nothing by default. Implement for PostgreSQL, Oracle, ...
       end
 
       # Inserts the given fixture into the table. Overridden in adapters that require
@@ -287,10 +281,10 @@ module ActiveRecord
       # Sanitizes the given LIMIT parameter in order to prevent SQL injection.
       #
       # The +limit+ may be anything that can evaluate to a string via #to_s. It
-      # should look like an integer, or a comma-delimited list of integers, or 
+      # should look like an integer, or a comma-delimited list of integers, or
       # an Arel SQL literal.
       #
-      # Returns Integer and Arel::Nodes::SqlLiteral limits as is. 
+      # Returns Integer and Arel::Nodes::SqlLiteral limits as is.
       # Returns the sanitized limit parameter, either as an integer, or as a
       # string which contains a comma-delimited list of integers.
       def sanitize_limit(limit)
@@ -361,6 +355,15 @@ module ActiveRecord
             end
           end
         end
+
+      def sql_for_insert(sql, pk, id_value, sequence_name, binds)
+        [sql, binds]
+      end
+
+      def last_inserted_id(result)
+        row = result.rows.first
+        row && row.first
+      end
     end
   end
 end

@@ -417,6 +417,14 @@ silence_stream(STDOUT) do
 end
 </ruby>
 
+The +quietly+ method addresses the common use case where you want to silence STDOUT and STDERR, even in subprocesses:
+
+<ruby>
+quietly { system 'bundle install' }
+</ruby>
+
+For example, the railties test suite uses that one in a few places to prevent command messages from being echoed intermixed with the progress status.
+
 Silencing exceptions is also possible with +suppress+. This method receives an arbitrary number of exception classes. If an exception is raised during the execution of the block and is +kind_of?+ any of the arguments, +suppress+ captures it and returns silently. Otherwise the exception is reraised:
 
 <ruby>
@@ -428,19 +436,19 @@ end
 
 NOTE: Defined in +active_support/core_ext/kernel/reporting.rb+.
 
-h4. +require_library_or_gem+
+h4. +in?+
 
-The convenience method +require_library_or_gem+ tries to load its argument with a regular +require+ first. If it fails loads +rubygems+ and tries again.
+The predicate +in?+ tests if an object is included in another object. An +ArgumentError+ exception will be raised if the argument passed does not respond to +include?+.
 
-If the first attempt is a failure and +rubygems+ can't be loaded the method raises +LoadError+. A +LoadError+ is also raised if +rubygems+ is available but the argument is not loadable as a gem.
-
-For example, that's the way the MySQL adapter loads the MySQL library:
+Examples of +in?+:
 
 <ruby>
-require_library_or_gem('mysql')
+1.in?([1,2])        # => true
+"lo".in?("hello")   # => true
+25.in?(30..50)      # => false
 </ruby>
 
-NOTE: Defined in +active_support/core_ext/kernel/requires.rb+.
+NOTE: Defined in +active_support/core_ext/object/inclusion.rb+.
 
 h3. Extensions to +Module+
 
@@ -527,9 +535,9 @@ The default value can be also specified with a block, which is called in the con
 <ruby>
 class User
   attr_accessor :name, :surname
-  attr_accessor_with_default(:full_name) {
-  [name, surname].compact.join(" ")
-  }
+  attr_accessor_with_default(:full_name) do
+    [name, surname].compact.join(" ")
+  end
 end
 
 u = User.new
@@ -860,7 +868,7 @@ The macro accepts several methods:
 delegate :name, :age, :address, :twitter, :to => :profile
 </ruby>
 
-When interpolated into a string, the +:to+ option should become an expression that evaluates to the object the method is delegated to. Typically a string or symbol. Such a expression is evaluated in the context of the receiver:
+When interpolated into a string, the +:to+ option should become an expression that evaluates to the object the method is delegated to. Typically a string or symbol. Such an expression is evaluated in the context of the receiver:
 
 <ruby>
 # delegates to the Rails constant
@@ -1045,6 +1053,8 @@ NOTE: Defined in +active_support/core_ext/class/attribute_accessors.rb+.
 
 h4. Class Inheritable Attributes
 
+WARNING: Class Inheritable Attributes are deprecated. It's recommended that you use +Class#class_attribute+ instead.
+
 Class variables are shared down the inheritance tree. Class instance variables are not shared, but they are not inherited either. The macros +class_inheritable_reader+, +class_inheritable_writer+, and +class_inheritable_accessor+ provide accessors for class-level data which is inherited but not shared with children:
 
 <ruby>
@@ -1207,7 +1217,7 @@ NOTE: Defined in +active_support/core_ext/string/output_safety.rb+.
 
 h4. +squish+
 
-The method +String#squish+ strips leading and trailing whitespace, and substitutes runs of whitespace with a single space each:
+The method +squish+ strips leading and trailing whitespace, and substitutes runs of whitespace with a single space each:
 
 <ruby>
 " \n  foo\n\r \t bar \n".squish # => "foo bar"
@@ -1249,6 +1259,15 @@ In the above example "dear" gets cut first, but then +:separator+ prevents it.
 WARNING: The option +:separator+ can't be a regexp.
 
 NOTE: Defined in +active_support/core_ext/string/filters.rb+.
+
+h4. +inquiry+
+
+The <tt>inquiry</tt> method converts a string into a +StringInquirer+ object making equality checks prettier.
+
+<ruby>
+"production".inquiry.production? # => true
+"active".inquiry.inactive?       # => false
+</ruby>
 
 h4. Key-based Interpolation
 
@@ -1808,6 +1827,8 @@ The method +ordinalize+ returns the ordinal string corresponding to the receiver
 2.ordinalize    # => "2nd"
 53.ordinalize   # => "53rd"
 2009.ordinalize # => "2009th"
+-21.ordinalize  # => "-21st"
+-134.ordinalize # => "-134th"
 </ruby>
 
 NOTE: Defined in +active_support/core_ext/integer/inflections.rb+.
@@ -1816,7 +1837,7 @@ h3. Extensions to +Float+
 
 h4. +round+
 
-The built-in method +Float#round+ rounds a float to the nearest integer. Active Support adds an optional parameter to let you specify a precision:
+The built-in method +Float#round+ rounds a float to the nearest integer. In Ruby 1.9 this method takes an optional argument to let you specify a precision. Active Support adds that functionality to +round+ in previous versions of Ruby:
 
 <ruby>
 Math::E.round(4) # => 2.7183
@@ -1971,15 +1992,20 @@ Active Support augments the API of arrays to ease certain ways of accessing them
 [].to(7)          # => []
 </ruby>
 
-Similarly, +from+ returns the tail from the element at the passed index on:
+Similarly, +from+ returns the tail from the element at the passed index to the end. If the index is greater than the length of the array, it returns an empty array.
 
 <ruby>
 %w(a b c d).from(2)  # => %w(c d)
-%w(a b c d).from(10) # => nil
+%w(a b c d).from(10) # => []
 [].from(0)           # => []
 </ruby>
 
 The methods +second+, +third+, +fourth+, and +fifth+ return the corresponding element (+first+ is built-in). Thanks to social wisdom and positive constructiveness all around, +forty_two+ is also available.
+
+<ruby>
+%w(a b c d).third # => c
+%w(a b c d).fifth # => nil
+</ruby>
 
 NOTE: Defined in +active_support/core_ext/array/access.rb+.
 
@@ -2009,7 +2035,7 @@ That syntactic sugar is used a lot in Rails to avoid positional arguments where 
 
 If a method expects a variable number of arguments and uses <tt>*</tt> in its declaration, however, such an options hash ends up being an item of the array of arguments, where it loses its role.
 
-In those cases, you may give an options hash a distinguished treatment with +extract_options!+. That method checks the type of the last item of an array. If it is a hash it pops it and returns it, otherwise returns an empty hash.
+In those cases, you may give an options hash a distinguished treatment with +extract_options!+. This method checks the type of the last item of an array. If it is a hash it pops it and returns it, otherwise it returns an empty hash.
 
 Let's see for example the definition of the +caches_action+ controller macro:
 
@@ -2076,7 +2102,7 @@ h5. +to_xml+
 The method +to_xml+ returns a string containing an XML representation of its receiver:
 
 <ruby>
-Contributor.all(:limit => 2, :order => 'rank ASC').to_xml
+Contributor.limit(2).order(:rank).to_xml
 # =>
 # <?xml version="1.0" encoding="UTF-8"?>
 # <contributors type="array">
@@ -2151,7 +2177,7 @@ The name of children nodes is by default the name of the root node singularized.
 The default XML builder is a fresh instance of <tt>Builder::XmlMarkup</tt>. You can configure your own builder via the <tt>:builder</tt> option. The method also accepts options like <tt>:dasherize</tt> and friends, they are forwarded to the builder:
 
 <ruby>
-Contributor.all(:limit => 2, :order => 'rank ASC').to_xml(:skip_types => true)
+Contributor.limit(2).order(:rank).to_xml(:skip_types => true)
 # =>
 # <?xml version="1.0" encoding="UTF-8"?>
 # <contributors>
@@ -2791,6 +2817,8 @@ h5. +Date.current+
 
 Active Support defines +Date.current+ to be today in the current time zone. That's like +Date.today+, except that it honors the user time zone, if defined. It also defines +Date.yesterday+ and +Date.tomorrow+, and the instance predicates +past?+, +today?+, and +future?+, all of them relative to +Date.current+.
 
+When making Date comparisons using methods which honor the user time zone, make sure to use +Date.current+ and not +Date.today+. There are cases where the user time zone might be in the future compared to the system time zone, which +Date.today+ uses by default. This means +Date.today+ may equal +Date.yesterday+.
+
 h5. Named dates
 
 h6. +prev_year+, +next_year+
@@ -2996,7 +3024,7 @@ Date.new(2010, 1, 31).change(:month => 2)
 
 h5(#date-durations). Durations
 
-Durations can be added and substracted to dates:
+Durations can be added to and subtracted from dates:
 
 <ruby>
 d = Date.current
@@ -3105,7 +3133,7 @@ h5. Named Datetimes
 
 h6. +DateTime.current+
 
-Active Support defines +DateTime.current+ to be like +Time.now.to_datetime+, except that it honors the user time zone, if defined. It also defines instance predicates +past?+, and +future?+ relative to +DateTime.current+.
+Active Support defines +DateTime.current+ to be like +Time.now.to_datetime+, except that it honors the user time zone, if defined. It also defines +DateTime.yesterday+ and +DateTime.tomorrow+, and the instance predicates +past?+, and +future?+ relative to +DateTime.current+.
 
 h5. Other Extensions
 
@@ -3204,7 +3232,7 @@ DateTime.current.change(:month => 2, :day => 30)
 
 h5(#datetime-durations). Durations
 
-Durations can be added and substracted to datetimes:
+Durations can be added to and subtracted from datetimes:
 
 <ruby>
 now = DateTime.current
@@ -3282,6 +3310,12 @@ t.advance(:seconds => 1)
 
 * If +since+ or +ago+ jump to a time that can't be expressed with +Time+ a +DateTime+ object is returned instead.
 
+h5. +Time.current+
+
+Active Support defines +Time.current+ to be today in the current time zone. That's like +Time.now+, except that it honors the user time zone, if defined. It also defines +Time.yesterday+ and +Time.tomorrow+, and the instance predicates +past?+, +today?+, and +future?+, all of them relative to +Time.current+.
+
+When making Time comparisons using methods which honor the user time zone, make sure to use +Time.current+ and not +Time.now+. There are cases where the user time zone might be in the future compared to the system time zone, which +Time.today+ uses by default. This means +Time.now+ may equal +Time.yesterday+.
+
 h4. Time Constructors
 
 Active Support defines +Time.current+ to be +Time.zone.now+ if there's a user time zone defined, with fallback to +Time.now+:
@@ -3319,7 +3353,7 @@ If the time to be constructed lies beyond the range supported by +Time+ in the r
 
 h5(#time-durations). Durations
 
-Durations can be added and substracted to time objects:
+Durations can be added to and subtracted from time objects:
 
 <ruby>
 now = Time.current
@@ -3383,11 +3417,11 @@ h4. +silence+
 Silences every log level lesser to the specified one for the duration of the given block. Log level orders are: debug, info, error and fatal.
 
 <ruby>
-  logger = Logger.new("log/development.log")
-  logger.silence(Logger::INFO) do
-    logger.debug("In space, no one can hear you scream.")
-    logger.info("Scream all you want, small mailman!")
-  end
+logger = Logger.new("log/development.log")
+logger.silence(Logger::INFO) do
+  logger.debug("In space, no one can hear you scream.")
+  logger.info("Scream all you want, small mailman!")
+end
 </ruby>
 
 h4. +datetime_format=+
@@ -3395,17 +3429,17 @@ h4. +datetime_format=+
 Modifies the datetime format output by the formatter class associated with this logger. If the formatter class does not have a +datetime_format+ method then this is ignored.
 
 <ruby>
-  class Logger::FormatWithTime < Logger::Formatter
-    cattr_accessor(:datetime_format) { "%Y%m%d%H%m%S" }
+class Logger::FormatWithTime < Logger::Formatter
+  cattr_accessor(:datetime_format) { "%Y%m%d%H%m%S" }
 
-    def self.call(severity, timestamp, progname, msg)
-      "#{timestamp.strftime(datetime_format)} -- #{String === msg ? msg : msg.inspect}\n"
-    end
+  def self.call(severity, timestamp, progname, msg)
+    "#{timestamp.strftime(datetime_format)} -- #{String === msg ? msg : msg.inspect}\n"
   end
+end
 
-  logger = Logger.new("log/development.log")
-  logger.formatter = Logger::FormatWithTime
-  logger.info("<- is the current time")
+logger = Logger.new("log/development.log")
+logger.formatter = Logger::FormatWithTime
+logger.info("<- is the current time")
 </ruby>
 
 NOTE: Defined in +active_support/core_ext/logger.rb+.

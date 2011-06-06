@@ -68,7 +68,7 @@ module ActionView
       #   # => /books/find
       #
       #   <%= url_for(:action => 'login', :controller => 'members', :only_path => false, :protocol => 'https') %>
-      #   # => https://www.railsapplication.com/members/login/
+      #   # => https://www.example.com/members/login/
       #
       #   <%= url_for(:action => 'play', :anchor => 'player') %>
       #   # => /messages/play/#player
@@ -81,8 +81,11 @@ module ActionView
       #   # => /workshops
       #
       #   <%= url_for(@workshop) %>
-      #   # calls @workshop.to_s
+      #   # calls @workshop.to_param which by default returns the id
       #   # => /workshops/5
+      #
+      #   # to_param can be re-defined in a model to provide different URL names:
+      #   # => /workshops/1-workshop-name
       #
       #   <%= url_for("http://www.example.com") %>
       #   # => http://www.example.com
@@ -157,7 +160,7 @@ module ActionView
       #
       # ==== Examples
       # Because it relies on +url_for+, +link_to+ supports both older-style controller/action/id arguments
-      # and newer RESTful routes.  Current Rails style favors RESTful routes whenever possible, so base
+      # and newer RESTful routes. Current Rails style favors RESTful routes whenever possible, so base
       # your application on resources and use
       #
       #   link_to "Profile", profile_path(@profile)
@@ -183,7 +186,7 @@ module ActionView
       #   link_to "Profiles", :controller => "profiles"
       #   # => <a href="/profiles">Profiles</a>
       #
-      # You can use a block as well if your link target is hard to fit into the name parameter. ERb example:
+      # You can use a block as well if your link target is hard to fit into the name parameter. ERB example:
       #
       #   <%= link_to(@profile) do %>
       #     <strong><%= @profile.name %></strong> -- <span>Check it out!</span>
@@ -345,7 +348,7 @@ module ActionView
       # Creates a link tag of the given +name+ using a URL created by the set of
       # +options+ unless the current request URI is the same as the links, in
       # which case only the name is returned (or the given block is yielded, if
-      # one exists).  You can give +link_to_unless_current+ a block which will
+      # one exists). You can give +link_to_unless_current+ a block which will
       # specialize the default behavior (e.g., show a "Start Here" link rather
       # than the link's text).
       #
@@ -372,7 +375,7 @@ module ActionView
       #   </ul>
       #
       # The implicit block given to +link_to_unless_current+ is evaluated if the current
-      # action is the action given.  So, if we had a comments page and wanted to render a
+      # action is the action given. So, if we had a comments page and wanted to render a
       # "Go Back" link instead of a link to the comments page, we could do something like this...
       #
       #    <%=
@@ -417,7 +420,7 @@ module ActionView
       end
 
       # Creates a link tag of the given +name+ using a URL created by the set of
-      # +options+ if +condition+ is true, in which case only the name is
+      # +options+ if +condition+ is true, otherwise only the name is
       # returned. To specialize the default behavior, you can pass a block that
       # accepts the name or the full argument list for +link_to_unless+ (see the examples
       # in +link_to_unless+).
@@ -552,10 +555,10 @@ module ActionView
       #   current_page?(:controller => 'shop', :action => 'checkout')
       #   # => true
       #
-      #   current_page?(:controller => 'shop', :action => 'checkout', :order => 'desc', :page=>'1')
+      #   current_page?(:controller => 'shop', :action => 'checkout', :order => 'desc', :page => '1')
       #   # => true
       #
-      #   current_page?(:controller => 'shop', :action => 'checkout', :order => 'desc', :page=>'2')
+      #   current_page?(:controller => 'shop', :action => 'checkout', :order => 'desc', :page => '2')
       #   # => false
       #
       #   current_page?(:controller => 'shop', :action => 'checkout', :order => 'desc')
@@ -576,7 +579,7 @@ module ActionView
         url_string = url_for(options)
 
         # We ignore any extra parameters in the request_uri if the
-        # submitted url doesn't have any either.  This lets the function
+        # submitted url doesn't have any either. This lets the function
         # work with things like ?order=asc
         if url_string.index("?")
           request_uri = request.fullpath
@@ -638,7 +641,7 @@ module ActionView
 
         # Processes the +html_options+ hash, converting the boolean
         # attributes from true/false form into the form required by
-        # HTML/XHTML.  (An attribute is considered to be boolean if
+        # HTML/XHTML. (An attribute is considered to be boolean if
         # its name is listed in the given +bool_attrs+ array.)
         #
         # More specifically, for each boolean attribute in +html_options+
@@ -648,7 +651,7 @@ module ActionView
         #
         # if the associated +bool_value+ evaluates to true, it is
         # replaced with the attribute's name; otherwise the attribute is
-        # removed from the +html_options+ hash.  (See the XHTML 1.0 spec,
+        # removed from the +html_options+ hash. (See the XHTML 1.0 spec,
         # section 4.5 "Attribute Minimization" for more:
         # http://www.w3.org/TR/xhtml1/#h-4.5)
         #

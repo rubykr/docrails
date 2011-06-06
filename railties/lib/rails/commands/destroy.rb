@@ -1,7 +1,7 @@
 require 'rails/generators'
-Rails::Generators.configure!
+require 'active_support/core_ext/object/inclusion'
 
-if [nil, "-h", "--help"].include?(ARGV.first)
+if ARGV.first.in?([nil, "-h", "--help"])
   Rails::Generators.help 'destroy'
   exit
 end

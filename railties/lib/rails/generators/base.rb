@@ -3,11 +3,12 @@ begin
 rescue LoadError
   puts "Thor is not available.\nIf you ran this command from a git checkout " \
        "of Rails, please make sure thor is installed,\nand run this command " \
-       "as `ruby #{$0} #{ARGV.join(" ")} --dev`"
+       "as `ruby #{$0} #{(ARGV | ['--dev']).join(" ")}`"
   exit
 end
 
 require 'rails/generators/actions'
+require 'active_support/core_ext/object/inclusion'
 
 module Rails
   module Generators
@@ -116,8 +117,8 @@ module Rails
       #
       # ==== Switches
       #
-      # All hooks come with switches for user interface. If the user don't want
-      # to use any test framework, he can do:
+      # All hooks come with switches for user interface. If you do not want
+      # to use any test framework, you can do:
       #
       #   rails generate controller Account --skip-test-framework
       #
@@ -164,7 +165,7 @@ module Rails
         names.each do |name|
           defaults = if options[:type] == :boolean
             { }
-          elsif [true, false].include?(default_value_for_option(name, options))
+          elsif default_value_for_option(name, options).in?([true, false])
             { :banner => "" }
           else
             { :desc => "#{name.to_s.humanize} to be invoked", :banner => "NAME" }

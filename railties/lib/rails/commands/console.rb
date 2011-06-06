@@ -23,7 +23,8 @@ module Rails
         opt.parse!(ARGV)
       end
 
-      @app.load_console(options[:sandbox])
+      @app.sandbox = options[:sandbox]
+      @app.load_console
 
       if options[:debugger]
         begin
@@ -47,6 +48,6 @@ module Rails
 end
 
 # Has to set the RAILS_ENV before config/application is required
-if ARGV.first && !ARGV.first.index("-") && env = ARGV.pop # has to pop the env ARGV so IRB doesn't freak
+if ARGV.first && !ARGV.first.index("-") && env = ARGV.shift # has to shift the env ARGV so IRB doesn't freak
   ENV['RAILS_ENV'] = %w(production development test).detect {|e| e =~ /^#{env}/} || env
 end

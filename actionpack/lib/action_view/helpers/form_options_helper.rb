@@ -125,7 +125,7 @@ module ActionView
       # This allows the user to submit a form page more than once with the expected results of creating multiple records.
       # In addition, this allows a single partial to be used to generate form inputs for both edit and create forms.
       #
-      # By default, <tt>post.person_id</tt> is the selected option.  Specify <tt>:selected => value</tt> to use a different selection
+      # By default, <tt>post.person_id</tt> is the selected option. Specify <tt>:selected => value</tt> to use a different selection
       # or <tt>:selected => nil</tt> to leave all options unselected. Similarly, you can specify values to be disabled in the option
       # tags by specifying the <tt>:disabled</tt> option. This can either be a single value or an array of values to be disabled.
       def select(object, method, choices, options = {}, html_options = {})
@@ -255,7 +255,7 @@ module ActionView
       # Accepts a container (hash, array, enumerable, your type) and returns a string of option tags. Given a container
       # where the elements respond to first and last (such as a two-element array), the "lasts" serve as option values and
       # the "firsts" as option text. Hashes are turned into this form automatically, so the keys become "firsts" and values
-      # become lasts. If +selected+ is specified, the matching "last" or element will get the selected option-tag.  +selected+
+      # become lasts. If +selected+ is specified, the matching "last" or element will get the selected option-tag. +selected+
       # may also be an array of values to be selected when using a multiple select.
       #
       # Examples (call, result):
@@ -274,10 +274,10 @@ module ActionView
       # You can optionally provide html attributes as the last element of the array.
       #
       # Examples:
-      #   options_for_select([ "Denmark", ["USA", {:class=>'bold'}], "Sweden" ], ["USA", "Sweden"])
+      #   options_for_select([ "Denmark", ["USA", {:class => 'bold'}], "Sweden" ], ["USA", "Sweden"])
       #     <option value="Denmark">Denmark</option>\n<option value="USA" class="bold" selected="selected">USA</option>\n<option value="Sweden" selected="selected">Sweden</option>
       #
-      #   options_for_select([["Dollar", "$", {:class=>"bold"}], ["Kroner", "DKK", {:onclick => "alert('HI');"}]])
+      #   options_for_select([["Dollar", "$", {:class => "bold"}], ["Kroner", "DKK", {:onclick => "alert('HI');"}]])
       #     <option value="$" class="bold">Dollar</option>\n<option value="DKK" onclick="alert('HI');">Kroner</option>
       #
       # If you wish to specify disabled option tags, set +selected+ to be a hash, with <tt>:disabled</tt> being either a value
@@ -406,13 +406,13 @@ module ActionView
       # wraps them with <tt><optgroup></tt> tags.
       #
       # Parameters:
-      # * +grouped_options+ - Accepts a nested array or hash of strings.  The first value serves as the
+      # * +grouped_options+ - Accepts a nested array or hash of strings. The first value serves as the
       #   <tt><optgroup></tt> label while the second value must be an array of options. The second value can be a
       #   nested array of text-value pairs. See <tt>options_for_select</tt> for more info.
       #    Ex. ["North America",[["United States","US"],["Canada","CA"]]]
       # * +selected_key+ - A value equal to the +value+ attribute for one of the <tt><option></tt> tags,
       #   which will have the +selected+ attribute set. Note: It is possible for this value to match multiple options
-      #   as you might have the same option in multiple groups.  Each will then get <tt>selected="selected"</tt>.
+      #   as you might have the same option in multiple groups. Each will then get <tt>selected="selected"</tt>.
       # * +prompt+ - set to true or a prompt string. When the select element doesn't have a value yet, this
       #   prepends an option with a generic prompt - "Please select" - or the given prompt string.
       #
@@ -427,7 +427,7 @@ module ActionView
       #
       # Sample usage (Hash):
       #   grouped_options = {
-      #    'North America' => [['United States','US], 'Canada'],
+      #    'North America' => [['United States','US'], 'Canada'],
       #    'Europe' => ['Denmark','Germany','France']
       #   }
       #   grouped_options_for_select(grouped_options)

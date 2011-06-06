@@ -1,28 +1,13 @@
+require 'action_dispatch/http/mime_type'
 require 'active_support/core_ext/class/attribute_accessors'
-require 'active_support/core_ext/string/output_safety'
-require 'action_view/template'
-require 'action_view/template/handler'
 require 'erubis'
 
 module ActionView
-  class OutputBuffer < ActiveSupport::SafeBuffer
-    def initialize(*)
-      super
-      encode! if encoding_aware?
-    end
-
-    def <<(value)
-      super(value.to_s)
-    end
-    alias :append= :<<
-    alias :safe_append= :safe_concat
-  end
-
   class Template
     module Handlers
       class Erubis < ::Erubis::Eruby
         def add_preamble(src)
-          src << "@output_buffer = ActionView::OutputBuffer.new;"
+          src << "@output_buffer = output_buffer || ActionView::OutputBuffer.new;"
         end
 
         def add_text(src, text)
@@ -55,7 +40,7 @@ module ActionView
 
       class ERB
         # Specify trim mode for the ERB compiler. Defaults to '-'.
-        # See ERb documentation for suitable values.
+        # See ERB documentation for suitable values.
         class_attribute :erb_trim_mode
         self.erb_trim_mode = '-'
 
@@ -63,7 +48,7 @@ module ActionView
         class_attribute :default_format
         self.default_format = Mime::HTML
 
-        # Default implemenation used.
+        # Default implementation used.
         class_attribute :erb_implementation
         self.erb_implementation = Erubis
 
@@ -71,6 +56,10 @@ module ActionView
 
         def self.call(template)
           new.call(template)
+        end
+
+        def supports_streaming?
+          true
         end
 
         def handles_encoding?

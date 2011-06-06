@@ -1,3 +1,4 @@
+require 'erubis'
 require 'active_support/configurable'
 require 'active_support/descendants_tracker'
 require 'active_support/core_ext/module/anonymous'
@@ -9,7 +10,7 @@ module AbstractController
   # <tt>AbstractController::Base</tt> is a low-level API. Nobody should be
   # using it directly, and subclasses (like ActionController::Base) are
   # expected to provide their own +render+ method, since rendering means
-  # different things depending on the context.  
+  # different things depending on the context.
   class Base
     attr_internal :response_body
     attr_internal :action_name
@@ -18,6 +19,7 @@ module AbstractController
     include ActiveSupport::Configurable
     extend ActiveSupport::DescendantsTracker
 
+    undef_method :not_implemented
     class << self
       attr_reader :abstract
       alias_method :abstract?, :abstract
@@ -128,17 +130,29 @@ module AbstractController
       self.class.action_methods
     end
 
+    # Returns true if a method for the action is available and
+    # can be dispatched, false otherwise.
+    #
+    # Notice that <tt>action_methods.include?("foo")</tt> may return
+    # false and <tt>available_action?("foo")</tt> returns true because
+    # available action consider actions that are also available
+    # through other means, for example, implicit render ones.
+    def available_action?(action_name)
+      method_for_action(action_name).present?
+    end
+
     private
 
-      # Returns true if the name can be considered an action. This can
-      # be overridden in subclasses to modify the semantics of what
-      # can be considered an action.
+      # Returns true if the name can be considered an action because
+      # it has a method defined in the controller.
       #
       # ==== Parameters
       # * <tt>name</tt> - The name of an action to be tested
       #
       # ==== Returns
       # * <tt>TrueClass</tt>, <tt>FalseClass</tt>
+      #
+      # :api: private
       def action_method?(name)
         self.class.action_methods.include?(name)
       end
@@ -146,6 +160,9 @@ module AbstractController
       # Call the action. Override this in a subclass to modify the
       # behavior around processing an action. This, and not #process,
       # is the intended way to override action dispatching.
+      #
+      # Notice that the first argument is the method to be dispatched
+      # which is *not* necessarily the same as the action name.
       def process_action(method_name, *args)
         send_action(method_name, *args)
       end
@@ -160,8 +177,8 @@ module AbstractController
       # If the action name was not found, but a method called "action_missing"
       # was found, #method_for_action will return "_handle_action_missing".
       # This method calls #action_missing with the current action name.
-      def _handle_action_missing
-        action_missing(@_action_name)
+      def _handle_action_missing(*args)
+        action_missing(@_action_name, *args)
       end
 
       # Takes an action name and returns the name of the method that will

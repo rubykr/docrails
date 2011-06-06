@@ -83,7 +83,7 @@ module ActiveRecord
     #
     # Example for find with a lock: Imagine two concurrent transactions:
     # each will read <tt>person.visits == 2</tt>, add 1 to it, and save, resulting
-    # in two saves of <tt>person.visits = 3</tt>.  By locking the row, the second
+    # in two saves of <tt>person.visits = 3</tt>. By locking the row, the second
     # transaction has to wait until the first is finished; we get the
     # expected <tt>person.visits == 4</tt>.
     #
@@ -123,6 +123,12 @@ module ActiveRecord
       end
     end
 
+    # Same as +first+ but raises <tt>ActiveRecord::RecordNotFound</tt> if no record
+    # is found. Note that <tt>first!</tt> accepts no arguments.
+    def first!
+      first or raise RecordNotFound
+    end
+
     # A convenience wrapper for <tt>find(:last, *args)</tt>. You can pass in all the
     # same arguments to this method as you can to <tt>find(:last)</tt>.
     def last(*args)
@@ -135,6 +141,12 @@ module ActiveRecord
       else
         find_last
       end
+    end
+
+    # Same as +last+ but raises <tt>ActiveRecord::RecordNotFound</tt> if no record
+    # is found. Note that <tt>last!</tt> accepts no arguments.
+    def last!
+      last or raise RecordNotFound
     end
 
     # A convenience wrapper for <tt>find(:all, *args)</tt>. You can pass in all the
@@ -171,7 +183,9 @@ module ActiveRecord
     def exists?(id = nil)
       id = id.id if ActiveRecord::Base === id
 
-      relation = select("1").limit(1)
+      join_dependency = construct_join_dependency_for_association_find
+      relation = construct_relation_for_association_find(join_dependency)
+      relation = relation.except(:select).select("1").limit(1)
 
       case id
       when Array, Hash
@@ -180,14 +194,13 @@ module ActiveRecord
         relation = relation.where(table[primary_key].eq(id)) if id
       end
 
-      relation.first ? true : false
+      connection.select_value(relation.to_sql) ? true : false
     end
 
     protected
 
     def find_with_associations
-      including = (@eager_load_values + @includes_values).uniq
-      join_dependency = ActiveRecord::Associations::ClassMethods::JoinDependency.new(@klass, including, [])
+      join_dependency = construct_join_dependency_for_association_find
       relation = construct_relation_for_association_find(join_dependency)
       rows = connection.select_all(relation.to_sql, 'SQL', relation.bind_values)
       join_dependency.instantiate(rows)
@@ -195,9 +208,14 @@ module ActiveRecord
       []
     end
 
+    def construct_join_dependency_for_association_find
+      including = (@eager_load_values + @includes_values).uniq
+      ActiveRecord::Associations::JoinDependency.new(@klass, including, [])
+    end
+
     def construct_relation_for_association_calculations
       including = (@eager_load_values + @includes_values).uniq
-      join_dependency = ActiveRecord::Associations::ClassMethods::JoinDependency.new(@klass, including, arel.froms.first)
+      join_dependency = ActiveRecord::Associations::JoinDependency.new(@klass, including, arel.froms.first)
       relation = except(:includes, :eager_load, :preload)
       apply_join_dependency(relation, join_dependency)
     end
@@ -208,7 +226,7 @@ module ActiveRecord
     end
 
     def apply_join_dependency(relation, join_dependency)
-      for association in join_dependency.join_associations
+      join_dependency.join_associations.each do |association|
         relation = association.join_relation(relation)
       end
 
@@ -228,6 +246,8 @@ module ActiveRecord
       orders = relation.order_values
       values = @klass.connection.distinct("#{@klass.connection.quote_table_name table_name}.#{primary_key}", orders)
 
+      relation = relation.dup
+
       ids_array = relation.select(values).collect {|row| row[primary_key]}
       ids_array.empty? ? raise(ThrowResult) : table[primary_key].in(ids_array)
     end
@@ -244,6 +264,7 @@ module ActiveRecord
     end
 
     def find_or_instantiator_by_attributes(match, attributes, *args)
+      options = args.size > 1 && args.last(2).all?{ |a| a.is_a?(Hash) } ? args.extract_options! : {}
       protected_attributes_for_create, unprotected_attributes_for_create = {}, {}
       args.each_with_index do |arg, i|
         if arg.is_a?(Hash)
@@ -258,9 +279,8 @@ module ActiveRecord
       record = where(conditions).first
 
       unless record
-        record = @klass.new do |r|
-          r.send(:attributes=, protected_attributes_for_create, true) unless protected_attributes_for_create.empty?
-          r.send(:attributes=, unprotected_attributes_for_create, false) unless unprotected_attributes_for_create.empty?
+        record = @klass.new(protected_attributes_for_create, options) do |r|
+          r.assign_attributes(unprotected_attributes_for_create, :without_protection => true)
         end
         yield(record) if block_given?
         record.save if match.instantiator == :create
@@ -291,9 +311,18 @@ module ActiveRecord
     def find_one(id)
       id = id.id if ActiveRecord::Base === id
 
+      if IdentityMap.enabled? && where_values.blank? &&
+        limit_value.blank? && order_values.blank? &&
+        includes_values.blank? && preload_values.blank? &&
+        readonly_value.nil? && joins_values.blank? &&
+        !@klass.locking_enabled? &&
+        record = IdentityMap.get(@klass, id)
+        return record
+      end
+
       column = columns_hash[primary_key]
 
-      substitute = connection.substitute_for(column, @bind_values)
+      substitute = connection.substitute_at(column, @bind_values.length)
       relation = where(table[primary_key].eq(substitute))
       relation.bind_values = [[column, id]]
       record = relation.first
@@ -325,8 +354,8 @@ module ActiveRecord
       if result.size == expected_size
         result
       else
-        conditions = arel.wheres.map { |x| x.value }.join(', ')
-        conditions = " [WHERE #{conditions}]" if conditions.present?
+        conditions = arel.where_sql
+        conditions = " [#{conditions}]" if conditions
 
         error = "Couldn't find all #{@klass.name.pluralize} with IDs "
         error << "(#{ids.join(", ")})#{conditions} (found #{result.size} results, but was looking for #{expected_size})"
@@ -346,7 +375,12 @@ module ActiveRecord
       if loaded?
         @records.last
       else
-        @last ||= reverse_order.limit(1).to_a[0]
+        @last ||=
+          if offset_value || limit_value
+            to_a.last
+          else
+            reverse_order.limit(1).to_a[0]
+          end
       end
     end
 

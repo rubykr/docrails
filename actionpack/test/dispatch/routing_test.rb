@@ -1,6 +1,7 @@
 require 'erb'
 require 'abstract_unit'
 require 'controller/fake_controllers'
+require 'active_support/core_ext/object/inclusion'
 
 class TestRoutingMapper < ActionDispatch::IntegrationTest
   SprocketsApp = lambda { |env|
@@ -495,7 +496,7 @@ class TestRoutingMapper < ActionDispatch::IntegrationTest
         resources :todos, :id => /\d+/
       end
 
-      scope '/countries/:country', :constraints => lambda { |params, req| %[all France].include?(params[:country]) } do
+      scope '/countries/:country', :constraints => lambda { |params, req| params[:country].in?(["all", "France"]) } do
         match '/',       :to => 'countries#index'
         match '/cities', :to => 'countries#cities'
       end
@@ -2309,6 +2310,38 @@ class TestRoutingMapper < ActionDispatch::IntegrationTest
     assert_raise(ArgumentError) do
       self.class.stub_controllers do |routes|
         routes.draw { resources :feeds, :controller => '/feeds' }
+      end
+    end
+  end
+
+  def test_invalid_route_name_raises_error
+    assert_raise(ArgumentError) do
+      self.class.stub_controllers do |routes|
+        routes.draw { get '/products', :to => 'products#index', :as => 'products ' }
+      end
+    end
+
+    assert_raise(ArgumentError) do
+      self.class.stub_controllers do |routes|
+        routes.draw { get '/products', :to => 'products#index', :as => ' products' }
+      end
+    end
+
+    assert_raise(ArgumentError) do
+      self.class.stub_controllers do |routes|
+        routes.draw { get '/products', :to => 'products#index', :as => 'products!' }
+      end
+    end
+
+    assert_raise(ArgumentError) do
+      self.class.stub_controllers do |routes|
+        routes.draw { get '/products', :to => 'products#index', :as => 'products index' }
+      end
+    end
+
+    assert_raise(ArgumentError) do
+      self.class.stub_controllers do |routes|
+        routes.draw { get '/products', :to => 'products#index', :as => '1products' }
       end
     end
   end

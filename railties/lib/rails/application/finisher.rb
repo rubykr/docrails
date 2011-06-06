@@ -41,6 +41,10 @@ module Rails
         ActionDispatch::Reloader.prepare!
       end
 
+      initializer :define_main_app_helper do |app|
+        app.routes.define_mounted_helper(:main_app)
+      end
+
       initializer :eager_load! do
         if config.cache_classes && !$rails_rake_task
           ActiveSupport.run_load_hooks(:before_eager_load, self)
@@ -53,6 +57,8 @@ module Rails
       end
 
       # Force routes to be loaded just at the end and add it to to_prepare callbacks
+      # This needs to be after the finisher hook to ensure routes added in the hook
+      # are still loaded.
       initializer :set_routes_reloader do |app|
         reloader = lambda { app.routes_reloader.execute_if_updated }
         reloader.call

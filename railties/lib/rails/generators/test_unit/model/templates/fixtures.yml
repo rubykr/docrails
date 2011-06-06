@@ -1,13 +1,13 @@
-# Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
+# Read about fixtures at http://api.rubyonrails.org/classes/Fixtures.html
 
 <% unless attributes.empty? -%>
 one:
-<% for attribute in attributes -%>
+<% attributes.each do |attribute| -%>
   <%= attribute.name %>: <%= attribute.default %>
 <% end -%>
 
 two:
-<% for attribute in attributes -%>
+<% attributes.each do |attribute| -%>
   <%= attribute.name %>: <%= attribute.default %>
 <% end -%>
 <% else -%>

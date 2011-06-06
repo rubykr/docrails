@@ -21,7 +21,7 @@ Before I dive into the details of a migration, here are a few examples of the so
 
 <ruby>
 class CreateProducts < ActiveRecord::Migration
-  def self.up
+  def up
     create_table :products do |t|
       t.string :name
       t.text :description
@@ -30,7 +30,7 @@ class CreateProducts < ActiveRecord::Migration
     end
   end
 
-  def self.down
+  def down
     drop_table :products
   end
 end
@@ -42,27 +42,42 @@ Migrations are not limited to changing the schema. You can also use them to fix 
 
 <ruby>
 class AddReceiveNewsletterToUsers < ActiveRecord::Migration
-  def self.up
+  def up
     change_table :users do |t|
       t.boolean :receive_newsletter, :default => false
     end
     User.update_all ["receive_newsletter = ?", true]
   end
 
-  def self.down
+  def down
     remove_column :users, :receive_newsletter
   end
 end
 </ruby>
 
+NOTE: Some "caveats":#using-models-in-your-migrations apply to using models in your migrations.
+
 This migration adds a +receive_newsletter+ column to the +users+ table. We want it to default to +false+ for new users, but existing users are considered
 to have already opted in, so we use the User model to set the flag to +true+ for existing users.
 
-NOTE: Some "caveats":#using-models-in-your-migrations apply to using models in your migrations.
+Rails 3.1 makes migrations smarter by providing a new <tt>change</tt> method. This method is preferred for writing constructive migrations (adding columns or tables). The migration knows how to migrate your database and reverse it when the migration is rolled back without the need to write a separate +down+ method.
+
+<ruby>
+class CreateProducts < ActiveRecord::Migration
+  def change
+    create_table :products do |t|
+      t.string :name
+      t.text :description
+
+      t.timestamps
+    end
+  end
+end
+</ruby>
 
 h4. Migrations are Classes
 
-A migration is a subclass of <tt>ActiveRecord::Migration</tt> that implements two class methods: +up+ (perform the required transformations) and +down+ (revert them).
+A migration is a subclass of <tt>ActiveRecord::Migration</tt> that implements two methods: +up+ (perform the required transformations) and +down+ (revert them).
 
 Active Record provides methods that perform common data definition tasks in a database independent way (you'll read about them in detail later):
 
@@ -100,7 +115,7 @@ h4. Changing Migrations
 
 Occasionally you will make a mistake when writing a migration. If you have already run the migration then you cannot just edit the migration and run the migration again: Rails thinks it has already run the migration and so will do nothing when you run +rake db:migrate+. You must rollback the migration (for example with +rake db:rollback+), edit your migration and then run +rake db:migrate+ to run the corrected version.
 
-In general editing existing migrations is not a good idea: you will be creating extra work for yourself and your co-workers and cause major headaches if the existing version of the migration has already been run on production machines. Instead you should write a new migration that performs the changes you require. Editing a freshly generated migration that has not yet been committed to source control (or more generally which has not been propagated beyond your development machine) is relatively harmless. Just use some common sense.
+In general editing existing migrations is not a good idea: you will be creating extra work for yourself and your co-workers and cause major headaches if the existing version of the migration has already been run on production machines. Instead you should write a new migration that performs the changes you require. Editing a freshly generated migration that has not yet been committed to source control (or more generally which has not been propagated beyond your development machine) is relatively harmless.
 
 h3. Creating a Migration
 
@@ -109,24 +124,20 @@ h4. Creating a Model
 The model and scaffold generators will create migrations appropriate for adding a new model. This migration will already contain instructions for creating the relevant table. If you tell Rails what columns you want then statements for adding those will also be created. For example, running
 
 <shell>
-rails generate model Product name:string description:text
+$ rails generate model Product name:string description:text
 </shell>
 
 will create a migration that looks like this
 
 <ruby>
 class CreateProducts < ActiveRecord::Migration
-  def self.up
+  def change
     create_table :products do |t|
       t.string :name
       t.text :description
 
       t.timestamps
     end
-  end
-
-  def self.down
-    drop_table :products
   end
 end
 </ruby>
@@ -139,17 +150,14 @@ h4. Creating a Standalone Migration
 If you are creating migrations for other purposes (for example to add a column to an existing table) then you can use the migration generator:
 
 <shell>
-rails generate migration AddPartNumberToProducts
+$ rails generate migration AddPartNumberToProducts
 </shell>
 
 This will create an empty but appropriately named migration:
 
 <ruby>
 class AddPartNumberToProducts < ActiveRecord::Migration
-  def self.up
-  end
-
-  def self.down
+  def change
   end
 end
 </ruby>
@@ -157,19 +165,15 @@ end
 If the migration name is of the form "AddXXXToYYY" or "RemoveXXXFromYYY" and is followed by a list of column names and types then a migration containing the appropriate +add_column+ and +remove_column+ statements will be created.
 
 <shell>
-rails generate migration AddPartNumberToProducts part_number:string
+$ rails generate migration AddPartNumberToProducts part_number:string
 </shell>
 
 will generate
 
 <ruby>
 class AddPartNumberToProducts < ActiveRecord::Migration
-  def self.up
+  def change
     add_column :products, :part_number, :string
-  end
-
-  def self.down
-    remove_column :products, :part_number
   end
 end
 </ruby>
@@ -177,18 +181,18 @@ end
 Similarly,
 
 <shell>
-rails generate migration RemovePartNumberFromProducts part_number:string
+$ rails generate migration RemovePartNumberFromProducts part_number:string
 </shell>
 
 generates
 
 <ruby>
 class RemovePartNumberFromProducts < ActiveRecord::Migration
-  def self.up
+  def up
     remove_column :products, :part_number
   end
 
-  def self.down
+  def down
     add_column :products, :part_number, :string
   end
 end
@@ -197,26 +201,23 @@ end
 You are not limited to one magically generated column, for example
 
 <shell>
-rails generate migration AddDetailsToProducts part_number:string price:decimal
+$ rails generate migration AddDetailsToProducts part_number:string price:decimal
 </shell>
 
 generates
 
 <ruby>
 class AddDetailsToProducts < ActiveRecord::Migration
-  def self.up
+  def change
     add_column :products, :part_number, :string
     add_column :products, :price, :decimal
-  end
-
-  def self.down
-    remove_column :products, :price
-    remove_column :products, :part_number
   end
 end
 </ruby>
 
 As always, what has been generated for you is just a starting point. You can add or remove from it as you see fit.
+
+NOTE: The generated migration file for destructive migrations will still be old-style using the +up+ and +down+ methods. This is because Rails doesn't know the original data types defined when you made the original changes.
 
 h3. Writing a Migration
 
@@ -284,7 +285,7 @@ change_table :products do |t|
   t.rename :upccode, :upc_code
 end
 </ruby>
-removes the +description+ and +name+ columns, creates a +part_number+ column and adds an index on it. Finally it renames the +upccode+ column.   This is the same as doing
+removes the +description+ and +name+ columns, creates a +part_number+ column and adds an index on it. Finally it renames the +upccode+ column. This is the same as doing
 
 <ruby>
 remove_column :products, :description
@@ -335,7 +336,22 @@ NOTE: The +references+ helper does not actually create foreign key constraints f
 
 If the helpers provided by Active Record aren't enough you can use the +execute+ function to execute arbitrary SQL.
 
-For more details and examples of individual methods check the API documentation, in particular the documentation for "<tt>ActiveRecord::ConnectionAdapters::SchemaStatements</tt>":http://api.rubyonrails.org/classes/ActiveRecord/ConnectionAdapters/SchemaStatements.html (which provides the methods available in the +up+ and +down+ methods),  "<tt>ActiveRecord::ConnectionAdapters::TableDefinition</tt>":http://api.rubyonrails.org/classes/ActiveRecord/ConnectionAdapters/TableDefinition.html (which provides the methods available on the object yielded by +create_table+) and "<tt>ActiveRecord::ConnectionAdapters::Table</tt>":http://api.rubyonrails.org/classes/ActiveRecord/ConnectionAdapters/Table.html (which provides the methods available on the object yielded by +change_table+).
+For more details and examples of individual methods check the API documentation, in particular the documentation for "<tt>ActiveRecord::ConnectionAdapters::SchemaStatements</tt>":http://api.rubyonrails.org/classes/ActiveRecord/ConnectionAdapters/SchemaStatements.html (which provides the methods available in the +up+ and +down+ methods), "<tt>ActiveRecord::ConnectionAdapters::TableDefinition</tt>":http://api.rubyonrails.org/classes/ActiveRecord/ConnectionAdapters/TableDefinition.html (which provides the methods available on the object yielded by +create_table+) and "<tt>ActiveRecord::ConnectionAdapters::Table</tt>":http://api.rubyonrails.org/classes/ActiveRecord/ConnectionAdapters/Table.html (which provides the methods available on the object yielded by +change_table+).
+
+h4. Writing Your +change+ Method
+
+The +change+ method removes the need to write both +up+ and +down+ methods in those cases that Rails know how to revert the changes automatically. Currently, the +change+ method supports only these migration definitions:
+
+* +add_column+
+* +add_index+
+* +add_timestamp+
+* +create_table+
+* +remove_timestamps+
+* +rename_column+
+* +rename_index+
+* +rename_table+
+
+If you're going to use other methods, you'll have to write the +up+ and +down+ methods normally.
 
 h4. Writing Your +down+ Method
 
@@ -344,7 +360,7 @@ The +down+ method of your migration should revert the transformations done by th
 <ruby>
 class ExampleMigration < ActiveRecord::Migration
 
-  def self.up
+  def up
     create_table :products do |t|
       t.references :category
     end
@@ -361,7 +377,7 @@ class ExampleMigration < ActiveRecord::Migration
     rename_column :users, :email, :email_address
   end
 
-  def self.down
+  def down
     rename_column :users, :email_address, :email
     remove_column :users, :home_page_url
     execute "ALTER TABLE products DROP FOREIGN KEY fk_products_categories"
@@ -369,9 +385,8 @@ class ExampleMigration < ActiveRecord::Migration
   end
 end
 </ruby>
-Sometimes your migration will do something which is just plain irreversible, for example it might destroy some data. In cases like those when you can't reverse the migration you can raise +IrreversibleMigration+ from your +down+ method. If someone tries to revert your migration an error message will be
-displayed saying that it can't be done.
 
+Sometimes your migration will do something which is just plain irreversible, for example it might destroy some data. In cases like those when you can't reverse the migration you can raise +ActiveRecord::IrreversibleMigration+ from your +down+ method. If someone tries to revert your migration an error message will be displayed saying that it can't be done.
 
 h3. Running Migrations
 
@@ -383,7 +398,7 @@ If you specify a target version, Active Record will run the required migrations 
 version is the numerical prefix on the migration's filename. For example to migrate to version 20080906120000 run
 
 <shell>
-rake db:migrate VERSION=20080906120000
+$ rake db:migrate VERSION=20080906120000
 </shell>
 
 If this is greater than the current version (i.e. it is migrating upwards) this will run the +up+ method on all migrations up to and including 20080906120000, if migrating downwards this will run the +down+ method on all the migrations down to, but not including, 20080906120000.
@@ -393,13 +408,13 @@ h4. Rolling Back
 A common task is to rollback the last migration, for example if you made a mistake in it and wish to correct it. Rather than tracking down the version number associated with the previous migration you can run
 
 <shell>
-rake db:rollback
+$ rake db:rollback
 </shell>
 
 This will run the +down+ method from the latest migration. If you need to undo several migrations you can provide a +STEP+ parameter:
 
 <shell>
-rake db:rollback STEP=3
+$ rake db:rollback STEP=3
 </shell>
 
 will run the +down+ method from the last 3 migrations.
@@ -407,7 +422,7 @@ will run the +down+ method from the last 3 migrations.
 The +db:migrate:redo+ task is a shortcut for doing a rollback and then migrating back up again. As with the +db:rollback+ task you can use the +STEP+ parameter if you need to go more than one version back, for example
 
 <shell>
-rake db:migrate:redo STEP=3
+$ rake db:migrate:redo STEP=3
 </shell>
 
 Neither of these Rake tasks do anything you could not do with +db:migrate+, they are simply more convenient since you do not need to explicitly specify the version to migrate to.
@@ -421,7 +436,7 @@ h4. Being Specific
 If you need to run a specific migration up or down the +db:migrate:up+ and +db:migrate:down+ tasks will do that. Just specify the appropriate version and the corresponding migration will have its +up+ or +down+ method invoked, for example
 
 <shell>
-rake db:migrate:up VERSION=20080906120000
+$ rake db:migrate:up VERSION=20080906120000
 </shell>
 
 will run the +up+ method from the 20080906120000 migration. These tasks check whether the migration has already run, so for example +db:migrate:up VERSION=20080906120000+ will do nothing if Active Record believes that 20080906120000 has already been run.
@@ -449,7 +464,7 @@ For example, this migration
 
 <ruby>
 class CreateProducts < ActiveRecord::Migration
-  def self.up
+  def change
     suppress_messages do
       create_table :products do |t|
         t.string :name
@@ -464,10 +479,6 @@ class CreateProducts < ActiveRecord::Migration
       sleep 10
       250
     end
-  end
-
-  def self.down
-    drop_table :products
   end
 end
 </ruby>
@@ -499,11 +510,7 @@ class AddPartNumberToProducts < ActiveRecord::Migration
   class Product < ActiveRecord::Base
   end
 
-  def self.up
-    ...
-  end
-
-  def self.down
+  def change
     ...
   end
 end
@@ -519,13 +526,9 @@ class AddPartNumberToProducts < ActiveRecord::Migration
   class Product < ActiveRecord::Base
   end
 
-  def self.up
+  def change
     add_column :product, :part_number, :string
     Product.reset_column_information
-    ...
-  end
-
-  def self.down
     ...
   end
 end
@@ -586,9 +589,10 @@ The Active Record way claims that intelligence belongs in your models, not in th
 
 Validations such as +validates :foreign_key, :uniqueness => true+ are one way in which models can enforce data integrity. The +:dependent+ option on associations allows models to automatically destroy child objects when the parent is destroyed. Like anything which operates at the application level these cannot guarantee referential integrity and so some people augment them with foreign key constraints.
 
-Although Active Record does not provide any tools for working directly with such features, the +execute+ method can be used to execute arbitrary SQL. There are also a number of plugins such as "foreign_key_migrations":http://github.com/harukizaemon/redhillonrails/tree/master/foreign_key_migrations/ which add foreign key support to Active Record (including support for dumping foreign keys in +db/schema.rb+).
+Although Active Record does not provide any tools for working directly with such features, the +execute+ method can be used to execute arbitrary SQL. There are also a number of plugins such as "foreign_key_migrations":https://github.com/harukizaemon/redhillonrails/tree/master/foreign_key_migrations/ which add foreign key support to Active Record (including support for dumping foreign keys in +db/schema.rb+).
 
 h3. Changelog
 
+* April 26, 2011: change generated +up+ and +down+ methods to +change+ method, and describe detail about +change+ method by "Prem Sichanugrist":http://sikachu.com
 * July 15, 2010: minor typos corrected by "Jaime Iniesta":http://jaimeiniesta.com
 * September 14, 2008: initial version by "Frederick Cheung":credits.html#fcheung

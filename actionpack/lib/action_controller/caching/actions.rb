@@ -39,8 +39,8 @@ module ActionController #:nodoc:
     # <tt>:action => 'list', :format => :xml</tt>.
     #
     # You can set modify the default action cache path by passing a
-    # <tt>:cache_path</tt> option.  This will be passed directly to
-    # <tt>ActionCachePath.path_for</tt>.  This is handy for actions with
+    # <tt>:cache_path</tt> option. This will be passed directly to
+    # <tt>ActionCachePath.path_for</tt>. This is handy for actions with
     # multiple possible routes that should be cached differently. If a
     # block is given, it is called with the current controller instance.
     #
@@ -56,19 +56,18 @@ module ActionController #:nodoc:
     #
     #     caches_page :public
     #
-    #     caches_action :index, :if => proc do |c|
-    #       !c.request.format.json?  # cache if is not a JSON request
+    #     caches_action :index, :if => proc do
+    #       !request.format.json?  # cache if is not a JSON request
     #     end
     #
     #     caches_action :show, :cache_path => { :project => 1 },
     #       :expires_in => 1.hour
     #
-    #     caches_action :feed, :cache_path => proc do |c|
-    #       if c.params[:user_id]
-    #         c.send(:user_list_url,
-    #           c.params[:user_id], c.params[:id])
+    #     caches_action :feed, :cache_path => proc do
+    #       if params[:user_id]
+    #         user_list_url(params[:user_id, params[:id])
     #       else
-    #         c.send(:list_url, c.params[:id])
+    #         list_url(params[:id])
     #       end
     #     end
     #   end
@@ -80,7 +79,7 @@ module ActionController #:nodoc:
     # header the Content-Type of the cached response could be wrong because
     # no information about the MIME type is stored in the cache key. So, if
     # you first ask for MIME type M in the Accept header, a cache entry is
-    # created, and then perform a second resquest to the same resource asking
+    # created, and then perform a second request to the same resource asking
     # for a different MIME type, you'd get the content cached for M.
     #
     # The <tt>:format</tt> parameter is taken into account though. The safest
@@ -103,12 +102,14 @@ module ActionController #:nodoc:
       end
 
       def _save_fragment(name, options)
-        return unless caching_allowed?
-
         content = response_body
         content = content.join if content.is_a?(Array)
 
-        write_fragment(name, content, options)
+        if caching_allowed?
+          write_fragment(name, content, options)
+        else
+          content
+        end
       end
 
     protected

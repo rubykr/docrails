@@ -14,7 +14,7 @@ module ActionView
       # variable. You can then use this variable anywhere in your templates or layout.
       #
       # ==== Examples
-      # The capture method can be used in ERb templates...
+      # The capture method can be used in ERB templates...
       #
       #   <% @greeting = capture do %>
       #     Welcome to my shiny new web page!  The date and time is
@@ -27,7 +27,7 @@ module ActionView
       #     "The current timestamp is #{Time.now}."
       #   end
       #
-      # You can then use that variable anywhere else.  For example:
+      # You can then use that variable anywhere else. For example:
       #
       #   <html>
       #   <head><title><%= @greeting %></title></head>
@@ -76,7 +76,7 @@ module ActionView
       #
       #   <%= stored_content %>
       #
-      # You can use the <tt>yield</tt> syntax alongside an existing call to <tt>yield</tt> in a layout.  For example:
+      # You can use the <tt>yield</tt> syntax alongside an existing call to <tt>yield</tt> in a layout. For example:
       #
       #   <%# This is the layout %>
       #   <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
@@ -107,8 +107,8 @@ module ActionView
       #     <%= javascript_include_tag :defaults %>
       #   <% end %>
       #
-      # That will place <tt>script</tt> tags for Prototype, Scriptaculous, and application.js (if it exists)
-      # on the page; this technique is useful if you'll only be using these scripts in a few views.
+      # That will place +script+ tags for your default set of JavaScript files on the page;
+      # this technique is useful if you'll only be using these scripts in a few views.
       #
       # Note that content_for concatenates the blocks it is given for a particular
       # identifier in order. For example:
@@ -135,8 +135,23 @@ module ActionView
       # for elements that will be fragment cached.
       def content_for(name, content = nil, &block)
         content = capture(&block) if block_given?
-        @_content_for[name] << content if content
-        @_content_for[name] unless content
+        if content
+          @view_flow.append(name, content)
+          nil
+        else
+          @view_flow.get(name)
+        end
+      end
+
+      # The same as +content_for+ but when used with streaming flushes
+      # straight back to the layout. In other words, if you want to
+      # concatenate several times to the same buffer when rendering a given
+      # template, you should use +content_for+, if not, use +provide+ to tell
+      # the layout to stop looking for more contents.
+      def provide(name, content = nil, &block)
+        content = capture(&block) if block_given?
+        result = @view_flow.append!(name, content) if content
+        result unless content
       end
 
       # content_for? simply checks whether any content has been captured yet using content_for
@@ -158,7 +173,7 @@ module ActionView
       #   </body>
       #   </html>
       def content_for?(name)
-        @_content_for[name].present?
+        @view_flow.get(name).present?
       end
 
       # Use an alternate output buffer for the duration of the block.

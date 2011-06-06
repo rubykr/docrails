@@ -23,20 +23,19 @@ module ApplicationTests
         "Rack::Lock",
         "ActiveSupport::Cache::Strategy::LocalCache",
         "Rack::Runtime",
-        "Rails::Rack::Logger",
+        "Rack::MethodOverride",
+        "Rails::Rack::Logger", # must come after Rack::MethodOverride to properly log overridden methods
         "ActionDispatch::ShowExceptions",
         "ActionDispatch::RemoteIp",
         "Rack::Sendfile",
         "ActionDispatch::Reloader",
         "ActionDispatch::Callbacks",
-        "ActiveRecord::IdentityMap::Middleware",
         "ActiveRecord::ConnectionAdapters::ConnectionManagement",
         "ActiveRecord::QueryCache",
         "ActionDispatch::Cookies",
         "ActionDispatch::Session::CookieStore",
         "ActionDispatch::Flash",
         "ActionDispatch::ParamsParser",
-        "Rack::MethodOverride",
         "ActionDispatch::Head",
         "Rack::ConditionalGet",
         "Rack::ETag",
@@ -50,6 +49,12 @@ module ApplicationTests
       boot!
 
       assert_equal "Rack::Cache", middleware.first
+    end
+
+    test "Rack::SSL is present when force_ssl is set" do
+      add_to_config "config.force_ssl = true"
+      boot!
+      assert middleware.include?("Rack::SSL")
     end
 
     test "removing Active Record omits its middleware" do
@@ -78,10 +83,10 @@ module ApplicationTests
       assert !middleware.include?("ActionDispatch::Static")
     end
 
-    test "removes show exceptions if action_dispatch.show_exceptions is disabled" do
+    test "includes show exceptions even action_dispatch.show_exceptions is disabled" do
       add_to_config "config.action_dispatch.show_exceptions = false"
       boot!
-      assert !middleware.include?("ActionDispatch::ShowExceptions")
+      assert middleware.include?("ActionDispatch::ShowExceptions")
     end
 
     test "removes ActionDispatch::Reloader if cache_classes is true" do
@@ -115,6 +120,7 @@ module ApplicationTests
     end
 
     test "identity map is inserted" do
+      add_to_config "config.active_record.identity_map = true"
       boot!
       assert middleware.include?("ActiveRecord::IdentityMap::Middleware")
     end

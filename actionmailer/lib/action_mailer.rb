@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2010 David Heinemeier Hansson
+# Copyright (c) 2004-2011 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -40,12 +40,10 @@ require 'active_support/lazy_load_hooks'
 module ActionMailer
   extend ::ActiveSupport::Autoload
 
-  autoload :AdvAttrAccessor
   autoload :Collector
   autoload :Base
   autoload :DeliveryMethods
   autoload :MailHelper
-  autoload :OldApi
   autoload :TestCase
   autoload :TestHelper
 end

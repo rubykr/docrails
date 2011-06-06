@@ -17,9 +17,10 @@ require 'models/developer'
 require 'models/subscriber'
 require 'models/book'
 require 'models/subscription'
-require 'models/categorization'
-require 'models/category'
 require 'models/essay'
+require 'models/category'
+require 'models/owner'
+require 'models/categorization'
 require 'models/member'
 require 'models/membership'
 require 'models/club'
@@ -27,7 +28,7 @@ require 'models/club'
 class HasManyThroughAssociationsTest < ActiveRecord::TestCase
   fixtures :posts, :readers, :people, :comments, :authors, :categories, :taggings, :tags,
            :owners, :pets, :toys, :jobs, :references, :companies, :members, :author_addresses,
-           :subscribers, :books, :subscriptions, :developers, :categorizations
+           :subscribers, :books, :subscriptions, :developers, :categorizations, :essays
 
   # Dummies to force column loads so query counts are clean.
   def setup
@@ -43,7 +44,7 @@ class HasManyThroughAssociationsTest < ActiveRecord::TestCase
   end
 
   def test_associate_existing
-    assert_queries(2) { posts(:thinking); people(:david) }
+    posts(:thinking); people(:david) # Warm cache
 
     assert_queries(1) do
       posts(:thinking).people << people(:david)
@@ -285,7 +286,7 @@ class HasManyThroughAssociationsTest < ActiveRecord::TestCase
   def test_update_counter_caches_on_delete_with_dependent_destroy
     post = posts(:welcome)
     tag  = post.tags.create!(:name => 'doomed')
-    post.update_attribute(:tags_with_destroy_count, post.tags.count)
+    post.update_column(:tags_with_destroy_count, post.tags.count)
 
     assert_difference ['post.reload.taggings_count', 'post.reload.tags_with_destroy_count'], -1 do
       posts(:welcome).tags_with_destroy.delete(tag)
@@ -295,7 +296,7 @@ class HasManyThroughAssociationsTest < ActiveRecord::TestCase
   def test_update_counter_caches_on_delete_with_dependent_nullify
     post = posts(:welcome)
     tag  = post.tags.create!(:name => 'doomed')
-    post.update_attribute(:tags_with_nullify_count, post.tags.count)
+    post.update_column(:tags_with_nullify_count, post.tags.count)
 
     assert_no_difference 'post.reload.taggings_count' do
       assert_difference 'post.reload.tags_with_nullify_count', -1 do
@@ -656,6 +657,25 @@ class HasManyThroughAssociationsTest < ActiveRecord::TestCase
     assert author.comments.include?(comment)
   end
 
+  def test_has_many_through_polymorphic_with_primary_key_option
+    assert_equal [categories(:general)], authors(:david).essay_categories
+
+    authors = Author.joins(:essay_categories).where('categories.id' => categories(:general).id)
+    assert_equal authors(:david), authors.first
+
+    assert_equal [owners(:blackbeard)], authors(:david).essay_owners
+
+    authors = Author.joins(:essay_owners).where("owners.name = 'blackbeard'")
+    assert_equal authors(:david), authors.first
+  end
+
+  def test_has_many_through_with_primary_key_option
+    assert_equal [categories(:general)], authors(:david).essay_categories_2
+
+    authors = Author.joins(:essay_categories_2).where('categories.id' => categories(:general).id)
+    assert_equal authors(:david), authors.first
+  end
+
   def test_size_of_through_association_should_increase_correctly_when_has_many_association_is_added
     post = posts(:thinking)
     readers = post.readers.size
@@ -679,10 +699,10 @@ class HasManyThroughAssociationsTest < ActiveRecord::TestCase
   end
 
   def test_joining_has_many_through_belongs_to
-    posts = Post.joins(:author_categorizations).
+    posts = Post.joins(:author_categorizations).order('posts.id').
                  where('categorizations.id' => categorizations(:mary_thinking_sti).id)
 
-    assert_equal [posts(:eager_other)], posts
+    assert_equal [posts(:eager_other), posts(:misc_by_mary), posts(:other_by_mary)], posts
   end
 
   def test_select_chosen_fields_only
@@ -740,10 +760,52 @@ class HasManyThroughAssociationsTest < ActiveRecord::TestCase
   def test_primary_key_option_on_source
     post     = posts(:welcome)
     category = categories(:general)
-    categorization = Categorization.create!(:post_id => post.id, :named_category_name => category.name)
+    Categorization.create!(:post_id => post.id, :named_category_name => category.name)
 
     assert_equal [category], post.named_categories
     assert_equal [category.name], post.named_category_ids # checks when target loaded
     assert_equal [category.name], post.reload.named_category_ids # checks when target no loaded
+  end
+
+  def test_create_should_not_raise_exception_when_join_record_has_errors
+    repair_validations(Categorization) do
+      Categorization.validate { |r| r.errors[:base] << 'Invalid Categorization' }
+      Category.create(:name => 'Fishing', :authors => [Author.first])
+    end
+  end
+
+  def test_save_should_not_raise_exception_when_join_record_has_errors
+    repair_validations(Categorization) do
+      Categorization.validate { |r| r.errors[:base] << 'Invalid Categorization' }
+      c = Category.create(:name => 'Fishing', :authors => [Author.first])
+      c.save
+    end
+  end
+
+  def test_create_bang_should_raise_exception_when_join_record_has_errors
+    repair_validations(Categorization) do
+      Categorization.validate { |r| r.errors[:base] << 'Invalid Categorization' }
+      assert_raises(ActiveRecord::RecordInvalid) do
+        Category.create!(:name => 'Fishing', :authors => [Author.first])
+      end
+    end
+  end
+
+  def test_save_bang_should_raise_exception_when_join_record_has_errors
+    repair_validations(Categorization) do
+      Categorization.validate { |r| r.errors[:base] << 'Invalid Categorization' }
+      c = Category.new(:name => 'Fishing', :authors => [Author.first])
+      assert_raises(ActiveRecord::RecordInvalid) do
+        c.save!
+      end
+    end
+  end
+
+  def test_create_bang_returns_falsy_when_join_record_has_errors
+    repair_validations(Categorization) do
+      Categorization.validate { |r| r.errors[:base] << 'Invalid Categorization' }
+      c = Category.new(:name => 'Fishing', :authors => [Author.first])
+      assert !c.save
+    end
   end
 end

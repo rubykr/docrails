@@ -1,17 +1,9 @@
 require 'active_record/connection_adapters/abstract_adapter'
-require 'active_support/core_ext/kernel/requires'
 require 'active_support/core_ext/object/blank'
 require 'set'
 
-begin
-  require 'mysql'
-rescue LoadError
-  raise "!!! Missing the mysql gem. Add it to your Gemfile: gem 'mysql'"
-end
-
-unless defined?(Mysql::Result) && Mysql::Result.method_defined?(:each_hash)
-  raise "!!! Outdated mysql gem. Upgrade to 2.8.1 or later. In your Gemfile: gem 'mysql', '2.8.1'. Or use gem 'mysql2'"
-end
+gem 'mysql', '~> 2.8.1'
+require 'mysql'
 
 class Mysql
   class Time
@@ -196,6 +188,7 @@ module ActiveRecord
         @connection_options, @config = connection_options, config
         @quoted_column_names, @quoted_table_names = {}, {}
         @statements = {}
+        @client_encoding = nil
         connect
       end
 
@@ -207,20 +200,23 @@ module ActiveRecord
         true
       end
 
-      # Returns +true+ when the connection adapter supports prepared statement
-      # caching, otherwise returns +false+
+      # Returns true, since this connection adapter supports prepared statement
+      # caching.
       def supports_statement_cache?
         true
       end
 
+      # Returns true, since this connection adapter supports migrations.
       def supports_migrations? #:nodoc:
         true
       end
 
+      # Returns true.
       def supports_primary_key? #:nodoc:
         true
       end
 
+      # Returns true, since this connection adapter supports savepoints.
       def supports_savepoints? #:nodoc:
         true
       end
@@ -241,6 +237,12 @@ module ActiveRecord
         else
           super
         end
+      end
+
+      def type_cast(value, column)
+        return super unless value == true || value == false
+
+        value ? 1 : 0
       end
 
       def quote_column_name(name) #:nodoc:
@@ -301,6 +303,8 @@ module ActiveRecord
         connect
       end
 
+      # Disconnects from the database if already connected. Otherwise, this
+      # method does nothing.
       def disconnect!
         @connection.close rescue nil
       end
@@ -323,6 +327,7 @@ module ActiveRecord
         rows
       end
 
+      # Clears the prepared statements cache.
       def clear_cache!
         @statements.values.each do |cache|
           cache[:stmt].close
@@ -330,42 +335,78 @@ module ActiveRecord
         @statements.clear
       end
 
+      if "<3".respond_to?(:encode)
+        # Taken from here:
+        #   https://github.com/tmtm/ruby-mysql/blob/master/lib/mysql/charset.rb
+        # Author: TOMITA Masahiro <tommy@tmtm.org>
+        ENCODINGS = {
+          "armscii8" => nil,
+          "ascii"    => Encoding::US_ASCII,
+          "big5"     => Encoding::Big5,
+          "binary"   => Encoding::ASCII_8BIT,
+          "cp1250"   => Encoding::Windows_1250,
+          "cp1251"   => Encoding::Windows_1251,
+          "cp1256"   => Encoding::Windows_1256,
+          "cp1257"   => Encoding::Windows_1257,
+          "cp850"    => Encoding::CP850,
+          "cp852"    => Encoding::CP852,
+          "cp866"    => Encoding::IBM866,
+          "cp932"    => Encoding::Windows_31J,
+          "dec8"     => nil,
+          "eucjpms"  => Encoding::EucJP_ms,
+          "euckr"    => Encoding::EUC_KR,
+          "gb2312"   => Encoding::EUC_CN,
+          "gbk"      => Encoding::GBK,
+          "geostd8"  => nil,
+          "greek"    => Encoding::ISO_8859_7,
+          "hebrew"   => Encoding::ISO_8859_8,
+          "hp8"      => nil,
+          "keybcs2"  => nil,
+          "koi8r"    => Encoding::KOI8_R,
+          "koi8u"    => Encoding::KOI8_U,
+          "latin1"   => Encoding::ISO_8859_1,
+          "latin2"   => Encoding::ISO_8859_2,
+          "latin5"   => Encoding::ISO_8859_9,
+          "latin7"   => Encoding::ISO_8859_13,
+          "macce"    => Encoding::MacCentEuro,
+          "macroman" => Encoding::MacRoman,
+          "sjis"     => Encoding::SHIFT_JIS,
+          "swe7"     => nil,
+          "tis620"   => Encoding::TIS_620,
+          "ucs2"     => Encoding::UTF_16BE,
+          "ujis"     => Encoding::EucJP_ms,
+          "utf8"     => Encoding::UTF_8,
+          "utf8mb4"  => Encoding::UTF_8,
+        }
+      else
+        ENCODINGS = Hash.new { |h,k| h[k] = k }
+      end
+
+      # Get the client encoding for this database
+      def client_encoding
+        return @client_encoding if @client_encoding
+
+        result = exec_query(
+          "SHOW VARIABLES WHERE Variable_name = 'character_set_client'",
+          'SCHEMA')
+        @client_encoding = ENCODINGS[result.rows.last.last]
+      end
+
       def exec_query(sql, name = 'SQL', binds = [])
         log(sql, name, binds) do
-          result = nil
-
-          cache = {}
-          if binds.empty?
-            stmt = @connection.prepare(sql)
-          else
-            cache = @statements[sql] ||= {
-              :stmt => @connection.prepare(sql)
-            }
-            stmt = cache[:stmt]
+          exec_stmt(sql, name, binds) do |cols, stmt|
+            ActiveRecord::Result.new(cols, stmt.to_a) if cols
           end
-
-          stmt.execute(*binds.map { |col, val|
-            col ? col.type_cast(val) : val
-          })
-          if metadata = stmt.result_metadata
-            cols = cache[:cols] ||= metadata.fetch_fields.map { |field|
-              field.name
-            }
-
-            metadata.free
-            result = ActiveRecord::Result.new(cols, stmt.to_a)
-          end
-
-          stmt.free_result
-          stmt.close if binds.empty?
-
-          result
         end
+      end
+
+      def last_inserted_id(result)
+        @connection.insert_id
       end
 
       def exec_without_stmt(sql, name = 'SQL') # :nodoc:
         # Some queries, like SHOW CREATE TABLE don't work through the prepared
-        # statement API.  For those queries, we need to use this method. :'(
+        # statement API. For those queries, we need to use this method. :'(
         log(sql, name) do
           result = @connection.query(sql)
           cols = []
@@ -390,7 +431,7 @@ module ActiveRecord
         end
       rescue ActiveRecord::StatementInvalid => exception
         if exception.message.split(":").first =~ /Packets out of order/
-          raise ActiveRecord::StatementInvalid, "'Packets out of order' error was received from the database. Please update your mysql bindings (gem install mysql) and read http://dev.mysql.com/doc/mysql/en/password-hashing.html for more information.  If you're on Windows, use the Instant Rails installer to get the updated mysql bindings."
+          raise ActiveRecord::StatementInvalid, "'Packets out of order' error was received from the database. Please update your mysql bindings (gem install mysql) and read http://dev.mysql.com/doc/mysql/en/password-hashing.html for more information. If you're on Windows, use the Instant Rails installer to get the updated mysql bindings."
         else
           raise
         end
@@ -406,6 +447,15 @@ module ActiveRecord
         super
         @connection.affected_rows
       end
+
+      def exec_delete(sql, name, binds)
+        log(sql, name, binds) do
+          exec_stmt(sql, name, binds) do |cols, stmt|
+            stmt.affected_rows
+          end
+        end
+      end
+      alias :exec_update :exec_delete
 
       def begin_db_transaction #:nodoc:
         exec_without_stmt "BEGIN"
@@ -437,19 +487,6 @@ module ActiveRecord
         execute("RELEASE SAVEPOINT #{current_savepoint_name}")
       end
 
-      def add_limit_offset!(sql, options) #:nodoc:
-        limit, offset = options[:limit], options[:offset]
-        if limit && offset
-          sql << " LIMIT #{offset.to_i}, #{sanitize_limit(limit)}"
-        elsif limit
-          sql << " LIMIT #{sanitize_limit(limit)}"
-        elsif offset
-          sql << " OFFSET #{offset.to_i}"
-        end
-        sql
-      end
-      deprecate :add_limit_offset!
-
       # SCHEMA STATEMENTS ========================================
 
       def structure_dump #:nodoc:
@@ -466,6 +503,8 @@ module ActiveRecord
         end.join("")
       end
 
+      # Drops the database specified on the +name+ attribute
+      # and creates it again using the provided +options+.
       def recreate_database(name, options = {}) #:nodoc:
         drop_database(name)
         create_database(name, options)
@@ -486,6 +525,10 @@ module ActiveRecord
         end
       end
 
+      # Drops a MySQL database.
+      #
+      # Example:
+      #   drop_database 'sebastian_development'
       def drop_database(name) #:nodoc:
         execute "DROP DATABASE IF EXISTS `#{name}`"
       end
@@ -504,18 +547,32 @@ module ActiveRecord
         show_variable 'collation_database'
       end
 
-      def tables(name = nil) #:nodoc:
-        tables = []
-        result = execute("SHOW TABLES", name)
-        result.each { |field| tables << field[0] }
+      def tables(name = nil, database = nil) #:nodoc:
+        result = execute(["SHOW TABLES", database].compact.join(' IN '), 'SCHEMA')
+        tables = result.collect { |field| field[0] }
         result.free
         tables
+      end
+
+      def table_exists?(name)
+        return true if super
+
+        name          = name.to_s
+        schema, table = name.split('.', 2)
+
+        unless table # A table was provided without a schema
+          table  = schema
+          schema = nil
+        end
+
+        tables(nil, schema).include? table
       end
 
       def drop_table(table_name, options = {})
         super(table_name, options)
       end
 
+      # Returns an array of indexes for the given table.
       def indexes(table_name, name = nil)#:nodoc:
         indexes = []
         current_index = nil
@@ -534,11 +591,11 @@ module ActiveRecord
         indexes
       end
 
+      # Returns an array of +MysqlColumn+ objects for the table specified by +table_name+.
       def columns(table_name, name = nil)#:nodoc:
         sql = "SHOW FIELDS FROM #{quote_table_name(table_name)}"
-        columns = []
-        result = execute(sql)
-        result.each { |field| columns << MysqlColumn.new(field[0], field[4], field[1], field[2] == "YES") }
+        result = execute(sql, 'SCHEMA')
+        columns = result.collect { |field| MysqlColumn.new(field[0], field[4], field[1], field[2] == "YES") }
         result.free
         columns
       end
@@ -547,6 +604,10 @@ module ActiveRecord
         super(table_name, options.reverse_merge(:options => "ENGINE=InnoDB"))
       end
 
+      # Renames a table.
+      #
+      # Example:
+      #   rename_table('octopuses', 'octopi')
       def rename_table(table_name, new_name)
         execute "RENAME TABLE #{quote_table_name(table_name)} TO #{quote_table_name(new_name)}"
       end
@@ -624,7 +685,7 @@ module ActiveRecord
       # Returns a table's primary key and belonging sequence.
       def pk_and_sequence_for(table) #:nodoc:
         keys = []
-        result = execute("describe #{quote_table_name(table)}")
+        result = execute("describe #{quote_table_name(table)}", 'SCHEMA')
         result.each_hash do |h|
           keys << h["Field"]if h["Key"] == "PRI"
         end
@@ -638,8 +699,8 @@ module ActiveRecord
         pk_and_sequence && pk_and_sequence.first
       end
 
-      def case_sensitive_equality_operator
-        "= BINARY"
+      def case_sensitive_modifier(node)
+        Arel::Nodes::Bin.new(node)
       end
 
       def limited_update_conditions(where_sql, quoted_table_name, quoted_primary_key)
@@ -737,6 +798,46 @@ module ActiveRecord
         end
 
       private
+      def exec_stmt(sql, name, binds)
+        cache = {}
+        if binds.empty?
+          stmt = @connection.prepare(sql)
+        else
+          cache = @statements[sql] ||= {
+            :stmt => @connection.prepare(sql)
+          }
+          stmt = cache[:stmt]
+        end
+
+
+        begin
+          stmt.execute(*binds.map { |col, val| type_cast(val, col) })
+        rescue Mysql::Error => e
+          # Older versions of MySQL leave the prepared statement in a bad
+          # place when an error occurs. To support older mysql versions, we
+          # need to close the statement and delete the statement from the
+          # cache.
+          stmt.close
+          @statements.delete sql
+          raise e
+        end
+
+        cols = nil
+        if metadata = stmt.result_metadata
+          cols = cache[:cols] ||= metadata.fetch_fields.map { |field|
+            field.name
+          }
+        end
+
+        result = yield [cols, stmt]
+
+        stmt.result_metadata.free if cols
+        stmt.free_result
+        stmt.close if binds.empty?
+
+        result
+      end
+
         def connect
           encoding = @config[:encoding]
           if encoding
@@ -779,6 +880,7 @@ module ActiveRecord
           version[0] >= 5
         end
 
+        # Returns the version of the connected MySQL server.
         def version
           @version ||= @connection.server_info.scan(/^(\d+)\.(\d+)\.(\d+)/).flatten.map { |v| v.to_i }
         end

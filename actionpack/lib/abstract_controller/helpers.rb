@@ -4,8 +4,6 @@ module AbstractController
   module Helpers
     extend ActiveSupport::Concern
 
-    include Rendering
-
     included do
       class_attribute :_helpers
       self._helpers = Module.new
@@ -69,7 +67,7 @@ module AbstractController
       #   helper FooHelper # => includes FooHelper
       #
       # When the argument is a string or symbol, the method will provide the "_helper" suffix, require the file
-      # and include the module in the template class.  The second form illustrates how to include custom helpers
+      # and include the module in the template class. The second form illustrates how to include custom helpers
       # when working with namespaced controllers, or other cases where the file containing the helper definition is not
       # in one of Rails' standard load paths:
       #   helper :foo             # => requires 'foo_helper' and includes FooHelper
@@ -112,17 +110,6 @@ module AbstractController
         default_helper_module! unless anonymous?
       end
 
-      private
-      # Makes all the (instance) methods in the helper module available to templates
-      # rendered through this controller.
-      #
-      # ==== Parameters
-      # * <tt>module</tt> - The module to include into the current helper module
-      #   for the class
-      def add_template_helper(mod)
-        _helpers.module_eval { include mod }
-      end
-
       # Returns a list of modules, normalized from the acceptable kinds of
       # helpers with the following behavior:
       #
@@ -153,6 +140,17 @@ module AbstractController
             raise ArgumentError, "helper must be a String, Symbol, or Module"
           end
         end
+      end
+
+      private
+      # Makes all the (instance) methods in the helper module available to templates
+      # rendered through this controller.
+      #
+      # ==== Parameters
+      # * <tt>module</tt> - The module to include into the current helper module
+      #   for the class
+      def add_template_helper(mod)
+        _helpers.module_eval { include mod }
       end
 
       def default_helper_module!

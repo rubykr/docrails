@@ -36,7 +36,7 @@ module ActionController
       action = action.to_s
       raise "MiddlewareStack#build requires an app" unless app
 
-      reverse.inject(app) do |a, middleware|
+      middlewares.reverse.inject(app) do |a, middleware|
         middleware.valid?(action) ?
           middleware.build(a) : a
       end
@@ -131,7 +131,7 @@ module ActionController
     attr_internal :headers, :response, :request
     delegate :session, :to => "@_request"
 
-    def initialize(*)
+    def initialize
       @_headers = {"Content-Type" => "text/html"}
       @_status = 200
       @_request = nil
@@ -201,19 +201,23 @@ module ActionController
     class_attribute :middleware_stack
     self.middleware_stack = ActionController::MiddlewareStack.new
 
-    def self.inherited(base)
+    def self.inherited(base) #nodoc:
       base.middleware_stack = self.middleware_stack.dup
       super
     end
 
+    # Adds given middleware class and its args to bottom of middleware_stack
     def self.use(*args, &block)
       middleware_stack.use(*args, &block)
     end
 
+    # Alias for middleware_stack
     def self.middleware
       middleware_stack
     end
 
+    # Makes the controller a rack endpoint that points to the action in
+    # the given env's action_dispatch.request.path_parameters key.
     def self.call(env)
       action(env['action_dispatch.request.path_parameters'][:action]).call(env)
     end

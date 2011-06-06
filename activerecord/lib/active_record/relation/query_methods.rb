@@ -8,7 +8,8 @@ module ActiveRecord
     attr_accessor :includes_values, :eager_load_values, :preload_values,
                   :select_values, :group_values, :order_values, :joins_values,
                   :where_values, :having_values, :bind_values,
-                  :limit_value, :offset_value, :lock_value, :readonly_value, :create_with_value, :from_value
+                  :limit_value, :offset_value, :lock_value, :readonly_value, :create_with_value,
+                  :from_value, :reorder_value
 
     def includes(*args)
       args.reject! {|a| a.blank? }
@@ -59,6 +60,14 @@ module ActiveRecord
 
       relation = clone
       relation.order_values += args.flatten
+      relation
+    end
+
+    def reorder(*args)
+      return self if args.blank?
+
+      relation = clone
+      relation.reorder_value = args.flatten
       relation
     end
 
@@ -159,7 +168,7 @@ module ActiveRecord
     end
 
     def arel
-      @arel ||= build_arel
+      @arel ||= with_default_scope.build_arel
     end
 
     def build_arel
@@ -176,7 +185,8 @@ module ActiveRecord
 
       arel.group(*@group_values.uniq.reject{|g| g.blank?}) unless @group_values.empty?
 
-      arel.order(*@order_values.uniq.reject{|o| o.blank?}) unless @order_values.empty?
+      order = @reorder_value ? @reorder_value : @order_values
+      arel.order(*order.uniq.reject{|o| o.blank?}) unless order.empty?
 
       build_select(arel, @select_values.uniq)
 
@@ -236,7 +246,7 @@ module ActiveRecord
           'string_join'
         when Hash, Symbol, Array
           'association_join'
-        when ActiveRecord::Associations::ClassMethods::JoinDependency::JoinAssociation
+        when ActiveRecord::Associations::JoinDependency::JoinAssociation
           'stashed_join'
         when Arel::Nodes::Join
           'join_node'
@@ -254,14 +264,14 @@ module ActiveRecord
 
       join_list = custom_join_ast(manager, string_joins)
 
-      join_dependency = ActiveRecord::Associations::ClassMethods::JoinDependency.new(
+      join_dependency = ActiveRecord::Associations::JoinDependency.new(
         @klass,
         association_joins,
         join_list
       )
 
       join_nodes.each do |join|
-        join_dependency.table_aliases[join.left.name.downcase] = 1
+        join_dependency.alias_tracker.aliased_name_for(join.left.name.downcase)
       end
 
       join_dependency.graft(*stashed_association_joins)
@@ -284,7 +294,7 @@ module ActiveRecord
         @implicit_readonly = false
         arel.project(*selects)
       else
-        arel.project(Arel.sql(@klass.quoted_table_name + '.*'))
+        arel.project(@klass.arel_table[Arel.star])
       end
     end
 

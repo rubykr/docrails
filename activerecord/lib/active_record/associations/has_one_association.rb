@@ -1,3 +1,5 @@
+require 'active_support/core_ext/object/inclusion'
+
 module ActiveRecord
   # = Active Record Belongs To Has One Association
   module Associations
@@ -8,7 +10,7 @@ module ActiveRecord
 
         reflection.klass.transaction do
           if target && target != record
-            remove_target!(options[:dependent])
+            remove_target!(options[:dependent]) unless target.destroyed?
           end
 
           if record
@@ -39,13 +41,7 @@ module ActiveRecord
         end
       end
 
-      def association_scope
-        super.order(options[:order])
-      end
-
       private
-
-        alias creation_attributes construct_owner_attributes
 
         # The reason that the save param for replace is false, if for create (not just build),
         # is because the setting of the foreign keys is actually handled by the scoping when
@@ -56,7 +52,7 @@ module ActiveRecord
         end
 
         def remove_target!(method)
-          if [:delete, :destroy].include?(method)
+          if method.in?([:delete, :destroy])
             target.send(method)
           else
             nullify_owner_attributes(target)

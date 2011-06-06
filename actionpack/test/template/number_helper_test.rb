@@ -19,19 +19,11 @@ class NumberHelperTest < ActionView::TestCase
     gigabytes(number) * 1024
   end
 
-  def silence_deprecation_warnings
-    @old_deprecatios_silenced = ActiveSupport::Deprecation.silenced
-    ActiveSupport::Deprecation.silenced  = true
-  end
-
-  def restore_deprecation_warnings
-    ActiveSupport::Deprecation.silenced  = @old_deprecatios_silenced
-  end
-
   def test_number_to_phone
     assert_equal("555-1234", number_to_phone(5551234))
     assert_equal("800-555-1212", number_to_phone(8005551212))
     assert_equal("(800) 555-1212", number_to_phone(8005551212, {:area_code => true}))
+    assert_equal("", number_to_phone("", {:area_code => true}))
     assert_equal("800 555 1212", number_to_phone(8005551212, {:delimiter => " "}))
     assert_equal("(800) 555-1212 x 123", number_to_phone(8005551212, {:area_code => true, :extension => 123}))
     assert_equal("800-555-1212", number_to_phone(8005551212, :extension => "  "))
@@ -140,7 +132,7 @@ class NumberHelperTest < ActionView::TestCase
 
   def test_number_with_precision_with_significant_true_and_zero_precision
     # Zero precision with significant is a mistake (would always return zero),
-    # so we treat it as if significant was false (increases backwards compatibily for number_to_human_size)
+    # so we treat it as if significant was false (increases backwards compatibility for number_to_human_size)
     assert_equal "124", number_with_precision(123.987, :precision => 0, :significant => true)
     assert_equal "12", number_with_precision(12, :precision => 0, :significant => true )
     assert_equal "12", number_with_precision("12.3", :precision => 0, :significant => true )
@@ -171,6 +163,17 @@ class NumberHelperTest < ActionView::TestCase
     assert_equal '10 Bytes', number_to_human_size(10)
   end
 
+  def test_number_to_human_size_with_si_prefix
+    assert_equal '3 Bytes',    number_to_human_size(3.14159265, :prefix => :si)
+    assert_equal '123 Bytes',  number_to_human_size(123.0, :prefix => :si)
+    assert_equal '123 Bytes',  number_to_human_size(123, :prefix => :si)
+    assert_equal '1.23 KB',    number_to_human_size(1234, :prefix => :si)
+    assert_equal '12.3 KB',    number_to_human_size(12345, :prefix => :si)
+    assert_equal '1.23 MB',    number_to_human_size(1234567, :prefix => :si)
+    assert_equal '1.23 GB',    number_to_human_size(1234567890, :prefix => :si)
+    assert_equal '1.23 TB',    number_to_human_size(1234567890123, :prefix => :si)
+  end
+
   def test_number_to_human_size_with_options_hash
     assert_equal '1.2 MB',   number_to_human_size(1234567, :precision => 2)
     assert_equal '3 Bytes',   number_to_human_size(3.14159265, :precision => 4)
@@ -195,7 +198,9 @@ class NumberHelperTest < ActionView::TestCase
 
   def test_number_to_human
     assert_equal '-123', number_to_human(-123)
-    assert_equal '0', number_to_human(0)
+    assert_equal '-0.5', number_to_human(-0.5)
+    assert_equal '0',   number_to_human(0)
+    assert_equal '0.5', number_to_human(0.5)
     assert_equal '123', number_to_human(123)
     assert_equal '1.23 Thousand', number_to_human(1234)
     assert_equal '12.3 Thousand', number_to_human(12345)

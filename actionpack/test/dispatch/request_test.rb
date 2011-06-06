@@ -137,30 +137,39 @@ class RequestTest < ActiveSupport::TestCase
   test "subdomains" do
     request = stub_request 'HTTP_HOST' => "www.rubyonrails.org"
     assert_equal %w( www ), request.subdomains
+    assert_equal "www", request.subdomain
 
     request = stub_request 'HTTP_HOST' => "www.rubyonrails.co.uk"
     assert_equal %w( www ), request.subdomains(2)
+    assert_equal "www", request.subdomain(2)
 
     request = stub_request 'HTTP_HOST' => "dev.www.rubyonrails.co.uk"
     assert_equal %w( dev www ), request.subdomains(2)
+    assert_equal "dev.www", request.subdomain(2)
 
     request = stub_request 'HTTP_HOST' => "dev.www.rubyonrails.co.uk", :tld_length => 2
     assert_equal %w( dev www ), request.subdomains
+    assert_equal "dev.www", request.subdomain
 
     request = stub_request 'HTTP_HOST' => "foobar.foobar.com"
     assert_equal %w( foobar ), request.subdomains
+    assert_equal "foobar", request.subdomain
 
     request = stub_request 'HTTP_HOST' => "192.168.1.200"
     assert_equal [], request.subdomains
+    assert_equal "", request.subdomain
 
     request = stub_request 'HTTP_HOST' => "foo.192.168.1.200"
     assert_equal [], request.subdomains
+    assert_equal "", request.subdomain
 
     request = stub_request 'HTTP_HOST' => "192.168.1.200.com"
     assert_equal %w( 192 168 1 ), request.subdomains
+    assert_equal "192.168.1", request.subdomain
 
     request = stub_request 'HTTP_HOST' => nil
     assert_equal [], request.subdomains
+    assert_equal "", request.subdomain
   end
 
   test "standard_port" do
@@ -349,6 +358,13 @@ class RequestTest < ActiveSupport::TestCase
     assert request.head?
   end
 
+  test "post masquerading as put" do
+    request = stub_request 'REQUEST_METHOD' => 'PUT', "rack.methodoverride.original_method" => "POST"
+    assert_equal "POST", request.method
+    assert_equal "PUT",  request.request_method
+    assert request.put?
+  end
+
   test "xml format" do
     request = stub_request
     request.expects(:parameters).at_least_once.returns({ :format => 'xml' })
@@ -452,6 +468,40 @@ class RequestTest < ActiveSupport::TestCase
     assert request.formats.empty?
   end
 
+  test "ignore_accept_header" do
+    ActionDispatch::Request.ignore_accept_header = true
+
+    begin
+      request = stub_request 'HTTP_ACCEPT' => 'application/xml'
+      request.expects(:parameters).at_least_once.returns({})
+      assert_equal [ Mime::HTML ], request.formats
+
+      request = stub_request 'HTTP_ACCEPT' => 'koz-asked/something-crazy'
+      request.expects(:parameters).at_least_once.returns({})
+      assert_equal [ Mime::HTML ], request.formats
+
+      request = stub_request 'HTTP_ACCEPT' => '*/*;q=0.1'
+      request.expects(:parameters).at_least_once.returns({})
+      assert_equal [ Mime::HTML ], request.formats
+
+      request = stub_request 'HTTP_ACCEPT' => 'application/jxw'
+      request.expects(:parameters).at_least_once.returns({})
+      assert_equal [ Mime::HTML ], request.formats
+
+      request = stub_request 'HTTP_ACCEPT' => 'application/xml',
+                             'HTTP_X_REQUESTED_WITH' => "XMLHttpRequest"
+      request.expects(:parameters).at_least_once.returns({})
+      assert_equal [ Mime::JS ], request.formats
+
+      request = stub_request 'HTTP_ACCEPT' => 'application/xml',
+                             'HTTP_X_REQUESTED_WITH' => "XMLHttpRequest"
+      request.expects(:parameters).at_least_once.returns({:format => :json})
+      assert_equal [ Mime::JSON ], request.formats
+    ensure
+      ActionDispatch::Request.ignore_accept_header = false
+    end
+  end
+
   test "negotiate_mime" do
     request = stub_request 'HTTP_ACCEPT' => 'text/html',
                            'HTTP_X_REQUESTED_WITH' => "XMLHttpRequest"
@@ -516,6 +566,44 @@ class RequestTest < ActiveSupport::TestCase
     assert_equal "[FILTERED]", request.raw_post
     assert_equal "[FILTERED]", request.params["amount"]
     assert_equal "1", request.params["step"]
+  end
+
+  test "filtered_path returns path with filtered query string" do
+    %w(; &).each do |sep|
+      request = stub_request('QUERY_STRING' => %w(username=sikachu secret=bd4f21f api_key=b1bc3b3cd352f68d79d7).join(sep),
+        'PATH_INFO' => '/authenticate',
+        'action_dispatch.parameter_filter' => [:secret, :api_key])
+
+      path = request.filtered_path
+      assert_equal %w(/authenticate?username=sikachu secret=[FILTERED] api_key=[FILTERED]).join(sep), path
+    end
+  end
+
+  test "filtered_path should not unescape a genuine '[FILTERED]' value" do
+    request = stub_request('QUERY_STRING' => "secret=bd4f21f&genuine=%5BFILTERED%5D",
+      'PATH_INFO' => '/authenticate',
+      'action_dispatch.parameter_filter' => [:secret])
+
+    path = request.filtered_path
+    assert_equal "/authenticate?secret=[FILTERED]&genuine=%5BFILTERED%5D", path
+  end
+
+  test "filtered_path should preserve duplication of keys in query string" do
+    request = stub_request('QUERY_STRING' => "username=sikachu&secret=bd4f21f&username=fxn",
+      'PATH_INFO' => '/authenticate',
+      'action_dispatch.parameter_filter' => [:secret])
+
+    path = request.filtered_path
+    assert_equal "/authenticate?username=sikachu&secret=[FILTERED]&username=fxn", path
+  end
+
+  test "filtered_path should ignore searchparts" do
+    request = stub_request('QUERY_STRING' => "secret",
+      'PATH_INFO' => '/authenticate',
+      'action_dispatch.parameter_filter' => [:secret])
+
+    path = request.filtered_path
+    assert_equal "/authenticate?secret", path
   end
 
 protected

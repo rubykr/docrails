@@ -1,38 +1,15 @@
-require 'set'
 require 'active_support/core_ext/object/try'
 require 'active_support/core_ext/array/wrap'
-require 'action_view/renderer/abstract_renderer'
 
 module ActionView
   class TemplateRenderer < AbstractRenderer #:nodoc:
-    attr_reader :rendered
+    def render(context, options)
+      @view = context
 
-    def initialize(view)
-      super
-      @rendered = Set.new
-    end
-
-    def render(options)
       wrap_formats(options[:template] || options[:file]) do
         template = determine_template(options)
+        freeze_formats(template.formats, true)
         render_template(template, options[:layout], options[:locals])
-      end
-    end
-
-    def render_once(options)
-      paths, locals = options[:once], options[:locals] || {}
-      layout, keys  = options[:layout], locals.keys
-      prefixes = options.fetch(:prefixes, @view.controller_prefixes)
-
-      raise "render :once expects a String or an Array to be given" unless paths
-
-      render_with_layout(layout, locals) do
-        contents = []
-        Array.wrap(paths).each do |path|
-          template = find_template(path, prefixes, false, keys)
-          contents << render_template(template, nil, locals) if @rendered.add?(template)
-        end
-        contents.join("\n")
       end
     end
 
@@ -43,7 +20,7 @@ module ActionView
       if options.key?(:text)
         Template::Text.new(options[:text], formats.try(:first))
       elsif options.key?(:file)
-        with_fallbacks { find_template(options[:file], options[:prefixes], false, keys) }
+        with_fallbacks { find_template(options[:file], nil, false, keys) }
       elsif options.key?(:inline)
         handler = Template.handler_for_extension(options[:type] || "erb")
         Template.new(options[:inline], "inline template", handler, :locals => keys)
@@ -56,7 +33,6 @@ module ActionView
     # Renders the given template. An string representing the layout can be
     # supplied as well.
     def render_template(template, layout_name = nil, locals = {}) #:nodoc:
-      freeze_formats(template.formats, true)
       view, locals = @view, locals || {}
 
       render_with_layout(layout_name, locals) do |layout|
@@ -72,7 +48,7 @@ module ActionView
 
       if layout
         view = @view
-        view.store_content_for(:layout, content)
+        view.view_flow.set(:layout, content)
         layout.render(view, locals){ |*name| view._layout_for(*name) }
       else
         content

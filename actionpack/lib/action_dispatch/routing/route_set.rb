@@ -1,7 +1,9 @@
 require 'rack/mount'
 require 'forwardable'
+require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/object/to_query'
 require 'active_support/core_ext/hash/slice'
+require 'active_support/core_ext/module/remove_method'
 
 module ActionDispatch
   module Routing
@@ -50,12 +52,13 @@ module ActionDispatch
       private
 
         def controller_reference(controller_param)
+          controller_name = "#{controller_param.camelize}Controller"
+
           unless controller = @controllers[controller_param]
-            controller_name = "#{controller_param.camelize}Controller"
             controller = @controllers[controller_param] =
-              ActiveSupport::Dependencies.ref(controller_name)
+              ActiveSupport::Dependencies.reference(controller_name)
           end
-          controller.get
+          controller.get(controller_name)
         end
 
         def dispatch(controller, action, env)
@@ -158,7 +161,7 @@ module ActionDispatch
 
             # We use module_eval to avoid leaks
             @module.module_eval <<-END_EVAL, __FILE__, __LINE__ + 1
-              remove_method :#{selector} if method_defined?(:#{selector})
+              remove_possible_method :#{selector}
               def #{selector}(*args)
                 options = args.extract_options!
 
@@ -192,7 +195,7 @@ module ActionDispatch
             hash_access_method = hash_access_name(name, kind)
 
             @module.module_eval <<-END_EVAL, __FILE__, __LINE__ + 1
-              remove_method :#{selector} if method_defined?(:#{selector})
+              remove_possible_method :#{selector}
               def #{selector}(*args)
                 url_for(#{hash_access_method}(*args))
               end
@@ -221,6 +224,7 @@ module ActionDispatch
         self.valid_conditions.push(:controller, :action)
 
         @append = []
+        @prepend = []
         @disable_clear_and_finalize = false
         clear!
       end
@@ -229,7 +233,6 @@ module ActionDispatch
         clear! unless @disable_clear_and_finalize
         eval_block(block)
         finalize! unless @disable_clear_and_finalize
-
         nil
       end
 
@@ -237,7 +240,16 @@ module ActionDispatch
         @append << block
       end
 
+      def prepend(&block)
+        @prepend << block
+      end
+
       def eval_block(block)
+        if block.arity == 1
+          raise "You are using the old router DSL which has been removed in Rails 3.1. " <<
+            "Please check how to update your routes file at: http://www.engineyard.com/blog/2010/the-lowdown-on-routes-in-rails-3/ " <<
+            "or add the rails_legacy_mapper gem to your Gemfile"
+        end
         mapper = Mapper.new(self)
         if default_scope
           mapper.with_default_scope(default_scope, &block)
@@ -254,8 +266,6 @@ module ActionDispatch
       end
 
       def clear!
-        # Clear the controller cache so we may discover new ones
-        @controller_constraints = nil
         @finalized = false
         routes.clear
         named_routes.clear
@@ -263,6 +273,7 @@ module ActionDispatch
           :parameters_key => PARAMETERS_KEY,
           :request_class  => request_class
         )
+        @prepend.each { |blk| eval_block(blk) }
       end
 
       def install_helpers(destinations = [ActionController::Base, ActionView::Base], regenerate_code = false)
@@ -273,8 +284,7 @@ module ActionDispatch
       module MountedHelpers
       end
 
-      def mounted_helpers(name = :main_app)
-        define_mounted_helper(name) if name
+      def mounted_helpers
         MountedHelpers
       end
 
@@ -329,8 +339,9 @@ module ActionDispatch
       end
 
       def add_route(app, conditions = {}, requirements = {}, defaults = {}, name = nil, anchor = true)
+        raise ArgumentError, "Invalid route name: '#{name}'" unless name.blank? || name.to_s.match(/^[_a-z]\w*$/i)
         route = Route.new(self, app, conditions, requirements, defaults, name, anchor)
-        @set.add_route(*route)
+        @set.add_route(route.app, route.conditions, route.defaults, route.name)
         named_routes[name] = route if name
         routes << route
         route

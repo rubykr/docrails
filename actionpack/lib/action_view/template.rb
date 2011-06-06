@@ -79,9 +79,9 @@ module ActionView
     # you are handling out-of-band metadata, you are
     # also responsible for alerting the user to any
     # problems with converting the user's data to
-    # the default_internal.
+    # the <tt>default_internal</tt>.
     #
-    # To do so, simply raise the raise WrongEncodingError
+    # To do so, simply raise the raise +WrongEncodingError+
     # as follows:
     #
     #     raise WrongEncodingError.new(
@@ -126,22 +126,25 @@ module ActionView
       @formats = Array.wrap(format).map { |f| f.is_a?(Mime::Type) ? f.ref : f }
     end
 
+    # Returns if the underlying handler supports streaming. If so,
+    # a streaming buffer *may* be passed when it start rendering.
+    def supports_streaming?
+      handler.respond_to?(:supports_streaming?) && handler.supports_streaming?
+    end
+
     # Render a template. If the template was not compiled yet, it is done
     # exactly before rendering.
     #
     # This method is instrumented as "!render_template.action_view". Notice that
     # we use a bang in this instrumentation because you don't want to
     # consume this in production. This is only slow if it's being listened to.
-    def render(view, locals, &block)
-      old_template, view._template = view._template, self
+    def render(view, locals, buffer=nil, &block)
       ActiveSupport::Notifications.instrument("!render_template.action_view", :virtual_path => @virtual_path) do
         compile!(view)
-        view.send(method_name, locals, &block)
+        view.send(method_name, locals, buffer, &block)
       end
     rescue Exception => e
       handle_render_error(view, e)
-    ensure
-      view._template = old_template
     end
 
     def mime_type
@@ -167,35 +170,8 @@ module ActionView
       end
     end
 
-    # Expires this template by setting his updated_at date to Jan 1st, 1970.
-    def expire!
-      @updated_at = Time.utc(1970)
-    end
-
-    # Receives a view context and renders a template exactly like self by using
-    # the @virtual_path. It raises an error if no @virtual_path was given.
-    def rerender(view)
-      raise "A template needs to have a virtual path in order to be rerendered" unless @virtual_path
-      name = @virtual_path.dup
-      if name.sub!(/(^|\/)_([^\/]*)$/, '\1\2')
-        view.render :partial => name
-      else
-        view.render :template => @virtual_path
-      end
-    end
-
-    # Used to store template data by template handlers.
-    def data
-      @data ||= {}
-    end
-
     def inspect
-      @inspect ||=
-        if defined?(Rails.root)
-          identifier.sub("#{Rails.root}/", '')
-        else
-          identifier
-        end
+      @inspect ||= defined?(Rails.root) ? identifier.sub("#{Rails.root}/", '') : identifier
     end
 
     protected
@@ -222,7 +198,7 @@ module ActionView
       # Among other things, this method is responsible for properly setting
       # the encoding of the source. Until this point, we assume that the
       # source is BINARY data. If no additional information is supplied,
-      # we assume the encoding is the same as Encoding.default_external.
+      # we assume the encoding is the same as <tt>Encoding.default_external</tt>.
       #
       # The user can also specify the encoding via a comment on the first
       # line of the template (# encoding: NAME-OF-ENCODING). This will work
@@ -236,8 +212,8 @@ module ActionView
       # specifying the encoding. For instance, ERB supports <%# encoding: %>
       #
       # Otherwise, after we figure out the correct encoding, we then
-      # encode the source into Encoding.default_internal. In general,
-      # this means that templates will be UTF-8 inside of Rails,
+      # encode the source into <tt>Encoding.default_internal</tt>.
+      # In general, this means that templates will be UTF-8 inside of Rails,
       # regardless of the original source encoding.
       def compile(view, mod) #:nodoc:
         method_name = self.method_name
@@ -274,16 +250,15 @@ module ActionView
           end
         end
 
-        arity = @handler.respond_to?(:arity) ? @handler.arity : @handler.method(:call).arity
-        code  = arity.abs == 1 ? @handler.call(self) : @handler.call(self, view)
+        code = @handler.call(self)
 
         # Make sure that the resulting String to be evalled is in the
         # encoding of the code
         source = <<-end_src
-          def #{method_name}(local_assigns)
-            _old_output_buffer = @output_buffer;#{locals_code};#{code}
+          def #{method_name}(local_assigns, output_buffer)
+            _old_virtual_path, @virtual_path = @virtual_path, #{@virtual_path.inspect};_old_output_buffer = @output_buffer;#{locals_code};#{code}
           ensure
-            @output_buffer = _old_output_buffer
+            @virtual_path, @output_buffer = _old_virtual_path, _old_output_buffer
           end
         end_src
 

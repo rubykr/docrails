@@ -83,7 +83,7 @@ module ActiveRecord #:nodoc:
   #
   # The <tt>authenticate_unsafely</tt> method inserts the parameters directly into the query
   # and is thus susceptible to SQL-injection attacks if the <tt>user_name</tt> and +password+
-  # parameters come directly from an HTTP request. The <tt>authenticate_safely</tt>  and
+  # parameters come directly from an HTTP request. The <tt>authenticate_safely</tt> and
   # <tt>authenticate_safely_simply</tt> both will sanitize the <tt>user_name</tt> and +password+
   # before inserting them in the query, which will ensure that an attacker can't escape the
   # query and fake the login (or worse).
@@ -393,8 +393,8 @@ module ActiveRecord #:nodoc:
     # Indicates whether table names should be the pluralized versions of the corresponding class names.
     # If true, the default table name for a Product class will be +products+. If false, it would just be +product+.
     # See table_name for the full rules on table/class naming. This is true, by default.
-    cattr_accessor :pluralize_table_names, :instance_writer => false
-    @@pluralize_table_names = true
+    class_attribute :pluralize_table_names, :instance_writer => false
+    self.pluralize_table_names = true
 
     ##
     # :singleton-method:
@@ -406,10 +406,10 @@ module ActiveRecord #:nodoc:
     ##
     # :singleton-method:
     # Specifies the format to use when dumping the database schema with Rails'
-    # Rakefile.  If :sql, the schema is dumped as (potentially database-
-    # specific) SQL statements.  If :ruby, the schema is dumped as an
+    # Rakefile. If :sql, the schema is dumped as (potentially database-
+    # specific) SQL statements. If :ruby, the schema is dumped as an
     # ActiveRecord::Schema file which can be loaded into any database that
-    # supports migrations.  Use :ruby if you want to have different database
+    # supports migrations. Use :ruby if you want to have different database
     # adapters for, e.g., your development and test environments.
     cattr_accessor :schema_format , :instance_writer => false
     @@schema_format = :ruby
@@ -425,8 +425,12 @@ module ActiveRecord #:nodoc:
     self.store_full_sti_class = true
 
     # Stores the default scope for the class
-    class_attribute :default_scoping, :instance_writer => false
-    self.default_scoping = []
+    class_attribute :default_scopes, :instance_writer => false
+    self.default_scopes = []
+
+    # Boolean flag to prevent infinite recursion when evaluating default scopes
+    class_attribute :apply_default_scope, :instance_writer => false
+    self.apply_default_scope = true
 
     # Returns a hash of all the attributes that have been specified for serialization as
     # keys and their class restriction as values.
@@ -437,22 +441,23 @@ module ActiveRecord #:nodoc:
     self._attr_readonly = []
 
     class << self # Class methods
-      delegate :find, :first, :last, :all, :destroy, :destroy_all, :exists?, :delete, :delete_all, :update, :update_all, :to => :scoped
+      delegate :find, :first, :first!, :last, :last!, :all, :exists?, :any?, :many?, :to => :scoped
+      delegate :destroy, :destroy_all, :delete, :delete_all, :update, :update_all, :to => :scoped
       delegate :find_each, :find_in_batches, :to => :scoped
-      delegate :select, :group, :order, :except, :limit, :offset, :joins, :where, :preload, :eager_load, :includes, :from, :lock, :readonly, :having, :create_with, :to => :scoped
+      delegate :select, :group, :order, :except, :reorder, :limit, :offset, :joins, :where, :preload, :eager_load, :includes, :from, :lock, :readonly, :having, :create_with, :to => :scoped
       delegate :count, :average, :minimum, :maximum, :sum, :calculate, :to => :scoped
 
-      # Executes a custom SQL query against your database and returns all the results.  The results will
+      # Executes a custom SQL query against your database and returns all the results. The results will
       # be returned as an array with columns requested encapsulated as attributes of the model you call
-      # this method from.  If you call <tt>Product.find_by_sql</tt> then the results will be returned in
+      # this method from. If you call <tt>Product.find_by_sql</tt> then the results will be returned in
       # a Product object with the attributes you specified in the SQL query.
       #
       # If you call a complicated SQL query which spans multiple tables the columns specified by the
       # SELECT will be attributes of the model, whether or not they are columns of the corresponding
       # table.
       #
-      # The +sql+ parameter is a full SQL query as a string.  It will be called as is, there will be
-      # no database agnostic conversions performed.  This should be a last resort because using, for example,
+      # The +sql+ parameter is a full SQL query as a string. It will be called as is, there will be
+      # no database agnostic conversions performed. This should be a last resort because using, for example,
       # MySQL specific terms will lock you to using that particular database engine or require you to
       # change your call if you switch engines.
       #
@@ -463,7 +468,7 @@ module ActiveRecord #:nodoc:
       #
       #   # You can use the same string replacement techniques as you can with ActiveRecord#find
       #   Post.find_by_sql ["SELECT title FROM posts WHERE author = ? AND created > ?", author_id, start_date]
-      #   > [#<Post:0x36bff9c @attributes={"first_name"=>"The Cheap Man Buys Twice"}>, ...]
+      #   > [#<Post:0x36bff9c @attributes={"title"=>"The Cheap Man Buys Twice"}>, ...]
       def find_by_sql(sql, binds = [])
         connection.select_all(sanitize_sql(sql), "#{name} Load", binds).collect! { |record| instantiate(record) }
       end
@@ -471,12 +476,21 @@ module ActiveRecord #:nodoc:
       # Creates an object (or multiple objects) and saves it to the database, if validations pass.
       # The resulting object is returned whether the object was saved successfully to the database or not.
       #
-      # The +attributes+ parameter can be either be a Hash or an Array of Hashes.  These Hashes describe the
+      # The +attributes+ parameter can be either be a Hash or an Array of Hashes. These Hashes describe the
       # attributes on the objects that are to be created.
+      #
+      # +create+ respects mass-assignment security and accepts either +:as+ or +:without_protection+ options
+      # in the +options+ parameter.
       #
       # ==== Examples
       #   # Create a single new object
       #   User.create(:first_name => 'Jamie')
+      #
+      #   # Create a single new object using the :admin mass-assignment security role
+      #   User.create({ :first_name => 'Jamie', :is_admin => true }, :as => :admin)
+      #
+      #   # Create a single new object bypassing mass-assignment security
+      #   User.create({ :first_name => 'Jamie', :is_admin => true }, :without_protection => true)
       #
       #   # Create an Array of new objects
       #   User.create([{ :first_name => 'Jamie' }, { :first_name => 'Jeremy' }])
@@ -490,11 +504,11 @@ module ActiveRecord #:nodoc:
       #   User.create([{ :first_name => 'Jamie' }, { :first_name => 'Jeremy' }]) do |u|
       #     u.is_admin = false
       #   end
-      def create(attributes = nil, &block)
+      def create(attributes = nil, options = {}, &block)
         if attributes.is_a?(Array)
-          attributes.collect { |attr| create(attr, &block) }
+          attributes.collect { |attr| create(attr, options, &block) }
         else
-          object = new(attributes)
+          object = new(attributes, options)
           yield(object) if block_given?
           object.save
           object
@@ -503,7 +517,7 @@ module ActiveRecord #:nodoc:
 
       # Returns the result of an SQL statement that should only include a COUNT(*) in the SELECT part.
       # The use of this method should be restricted to complicated SQL queries that can't be executed
-      # using the ActiveRecord::Calculations class methods.  Look into those before using this.
+      # using the ActiveRecord::Calculations class methods. Look into those before using this.
       #
       # ==== Parameters
       #
@@ -540,7 +554,7 @@ module ActiveRecord #:nodoc:
       #
       # ==== Example
       #   # Serialize a preferences attribute
-      #   class User
+      #   class User < ActiveRecord::Base
       #     serialize :preferences
       #   end
       def serialize(attr_name, class_name = Object)
@@ -567,20 +581,30 @@ module ActiveRecord #:nodoc:
       #
       # ==== Examples
       #
-      #   class Invoice < ActiveRecord::Base; end;
+      #   class Invoice < ActiveRecord::Base
+      #   end
+      #
       #   file                  class               table_name
       #   invoice.rb            Invoice             invoices
       #
-      #   class Invoice < ActiveRecord::Base; class Lineitem < ActiveRecord::Base; end; end;
+      #   class Invoice < ActiveRecord::Base
+      #     class Lineitem < ActiveRecord::Base
+      #     end
+      #   end
+      #
       #   file                  class               table_name
       #   invoice.rb            Invoice::Lineitem   invoice_lineitems
       #
-      #   module Invoice; class Lineitem < ActiveRecord::Base; end; end;
+      #   module Invoice
+      #     class Lineitem < ActiveRecord::Base
+      #     end
+      #   end
+      #
       #   file                  class               table_name
       #   invoice/lineitem.rb   Invoice::Lineitem   lineitems
       #
       # Additionally, the class-level +table_name_prefix+ is prepended and the
-      # +table_name_suffix+ is appended.  So if you have "myapp_" as a prefix,
+      # +table_name_suffix+ is appended. So if you have "myapp_" as a prefix,
       # the table name guess for an Invoice class becomes "myapp_invoices".
       # Invoice::Lineitem becomes "myapp_invoice_lineitems".
       #
@@ -614,7 +638,7 @@ module ActiveRecord #:nodoc:
         @inheritance_column ||= "type"
       end
 
-      # Lazy-set the sequence name to the connection's default.  This method
+      # Lazy-set the sequence name to the connection's default. This method
       # is only ever called once since set_sequence_name overrides it.
       def sequence_name #:nodoc:
         reset_sequence_name
@@ -626,7 +650,7 @@ module ActiveRecord #:nodoc:
         default
       end
 
-      # Sets the table name. If the value is nil or false  then the value returned by the given
+      # Sets the table name. If the value is nil or false then the value returned by the given
       # block is used.
       #
       #   class Project < ActiveRecord::Base
@@ -636,7 +660,7 @@ module ActiveRecord #:nodoc:
         @quoted_table_name = nil
         define_attr_method :table_name, value, &block
 
-        @arel_table = Arel::Table.new(table_name, :engine => arel_engine)
+        @arel_table = Arel::Table.new(table_name, arel_engine)
         @relation = Relation.new(self, arel_table)
       end
       alias :table_name= :set_table_name
@@ -757,6 +781,17 @@ module ActiveRecord #:nodoc:
         super || (table_exists? && column_names.include?(attribute.to_s.sub(/=$/, '')))
       end
 
+      # Returns an array of column names as strings if it's not
+      # an abstract class and table exists.
+      # Otherwise it returns an empty array.
+      def attribute_names
+        @attribute_names ||= if !abstract_class? && table_exists?
+            column_names
+          else
+            []
+          end
+      end
+
       # Set the lookup ancestors for ActiveModel.
       def lookup_ancestors #:nodoc:
         klass = self
@@ -820,6 +855,10 @@ module ActiveRecord #:nodoc:
         @symbolized_base_class ||= base_class.to_s.to_sym
       end
 
+      def symbolized_sti_name
+        @symbolized_sti_name ||= sti_name.present? ? sti_name.to_sym : symbolized_base_class
+      end
+
       # Returns the base AR subclass that this class descends from. If A
       # extends AR::Base, A.base_class will return A. If B descends from A
       # through some arbitrarily deep hierarchy, B.base_class will return A.
@@ -869,7 +908,9 @@ module ActiveRecord #:nodoc:
       # Returns a scope for this class without taking into account the default_scope.
       #
       #   class Post < ActiveRecord::Base
-      #     default_scope :published => true
+      #     def self.default_scope
+      #       where :published => true
+      #     end
       #   end
       #
       #   Post.all          # Fires "SELECT * FROM posts WHERE published = true"
@@ -879,7 +920,7 @@ module ActiveRecord #:nodoc:
       # not use the default_scope:
       #
       #   Post.unscoped {
-      #     limit(10) # Fires "SELECT * FROM posts LIMIT 10"
+      #     Post.limit(10) # Fires "SELECT * FROM posts LIMIT 10"
       #   }
       #
       # It is recommended to use block form of unscoped because chaining unscoped with <tt>scope</tt>
@@ -891,13 +932,8 @@ module ActiveRecord #:nodoc:
         block_given? ? relation.scoping { yield } : relation
       end
 
-      def scoped_methods #:nodoc:
-        key = :"#{self}_scoped_methods"
-        Thread.current[key] = Thread.current[key].presence || self.default_scoping.dup
-      end
-
       def before_remove_const #:nodoc:
-        reset_scoped_methods
+        self.current_scope = nil
       end
 
       # Specifies how the record is loaded by +Marshal+.
@@ -973,8 +1009,8 @@ module ActiveRecord #:nodoc:
           relation
         end
 
-        def type_condition
-          sti_column = arel_table[inheritance_column.to_sym]
+        def type_condition(table = arel_table)
+          sti_column = table[inheritance_column.to_sym]
           sti_names  = ([self] + descendants).map { |model| model.sti_name }
 
           sti_column.in(sti_names)
@@ -995,7 +1031,7 @@ module ActiveRecord #:nodoc:
             if parent < ActiveRecord::Base && !parent.abstract_class?
               contained = parent.table_name
               contained = contained.singularize if parent.pluralize_table_names
-              contained << '_'
+              contained += '_'
             end
             "#{full_table_name_prefix}#{contained}#{undecorated_table_name(name)}#{table_name_suffix}"
           else
@@ -1019,7 +1055,7 @@ module ActiveRecord #:nodoc:
             super unless all_attributes_exists?(attribute_names)
             if match.finder?
               options = arguments.extract_options!
-              relation = options.any? ? construct_finder_arel(options, current_scoped_methods) : scoped
+              relation = options.any? ? scoped(options) : scoped
               relation.send :find_by_attributes, match, attribute_names, *arguments
             elsif match.instantiator?
               scoped.send :find_or_instantiator_by_attributes, match, attribute_names, *arguments, &block
@@ -1079,7 +1115,7 @@ module ActiveRecord #:nodoc:
         # <tt>where</tt>, <tt>includes</tt>, and <tt>joins</tt> operations in <tt>Relation</tt>, which are merged.
         #
         # <tt>joins</tt> operations are uniqued so multiple scopes can join in the same table without table aliasing
-        # problems.  If you need to join multiple tables, but still want one of the tables to be uniqued, use the
+        # problems. If you need to join multiple tables, but still want one of the tables to be uniqued, use the
         # array of strings format for your joins.
         #
         #   class Article < ActiveRecord::Base
@@ -1108,43 +1144,47 @@ module ActiveRecord #:nodoc:
         #   end
         #
         # *Note*: the +:find+ scope also has effect on update and deletion methods, like +update_all+ and +delete_all+.
-        def with_scope(method_scoping = {}, action = :merge, &block)
-          method_scoping = method_scoping.method_scoping if method_scoping.respond_to?(:method_scoping)
+        def with_scope(scope = {}, action = :merge, &block)
+          # If another Active Record class has been passed in, get its current scope
+          scope = scope.current_scope if !scope.is_a?(Relation) && scope.respond_to?(:current_scope)
 
-          if method_scoping.is_a?(Hash)
+          previous_scope = self.current_scope
+
+          if scope.is_a?(Hash)
             # Dup first and second level of hash (method and params).
-            method_scoping = method_scoping.dup
-            method_scoping.each do |method, params|
-              method_scoping[method] = params.dup unless params == true
+            scope = scope.dup
+            scope.each do |method, params|
+              scope[method] = params.dup unless params == true
             end
 
-            method_scoping.assert_valid_keys([ :find, :create ])
-            relation = construct_finder_arel(method_scoping[:find] || {})
+            scope.assert_valid_keys([ :find, :create ])
+            relation = construct_finder_arel(scope[:find] || {})
+            relation.default_scoped = true unless action == :overwrite
 
-            if current_scoped_methods && current_scoped_methods.create_with_value && method_scoping[:create]
+            if previous_scope && previous_scope.create_with_value && scope[:create]
               scope_for_create = if action == :merge
-                current_scoped_methods.create_with_value.merge(method_scoping[:create])
+                previous_scope.create_with_value.merge(scope[:create])
               else
-                method_scoping[:create]
+                scope[:create]
               end
 
               relation = relation.create_with(scope_for_create)
             else
-              scope_for_create = method_scoping[:create]
-              scope_for_create ||= current_scoped_methods.create_with_value if current_scoped_methods
+              scope_for_create = scope[:create]
+              scope_for_create ||= previous_scope.create_with_value if previous_scope
               relation = relation.create_with(scope_for_create) if scope_for_create
             end
 
-            method_scoping = relation
+            scope = relation
           end
 
-          method_scoping = current_scoped_methods.merge(method_scoping) if current_scoped_methods && action ==  :merge
+          scope = previous_scope.merge(scope) if previous_scope && action == :merge
 
-          self.scoped_methods << method_scoping
+          self.current_scope = scope
           begin
             yield
           ensure
-            self.scoped_methods.pop
+            self.current_scope = previous_scope
           end
         end
 
@@ -1167,39 +1207,85 @@ MSG
           with_scope(method_scoping, :overwrite, &block)
         end
 
-        # Sets the default options for the model. The format of the
-        # <tt>options</tt> argument is the same as in find.
-        #
-        #   class Person < ActiveRecord::Base
-        #     default_scope order('last_name, first_name')
-        #   end
-        #
-        # <tt>default_scope</tt> is also applied while creating/building a record. It is not
-        # applied while updating a record.
+        def current_scope #:nodoc:
+          Thread.current[:"#{self}_current_scope"]
+        end
+
+        def current_scope=(scope) #:nodoc:
+          Thread.current[:"#{self}_current_scope"] = scope
+        end
+
+        # Use this macro in your model to set a default scope for all operations on
+        # the model.
         #
         #   class Article < ActiveRecord::Base
         #     default_scope where(:published => true)
         #   end
         #
+        #   Article.all # => SELECT * FROM articles WHERE published = true
+        #
+        # The <tt>default_scope</tt> is also applied while creating/building a record. It is not
+        # applied while updating a record.
+        #
         #   Article.new.published    # => true
         #   Article.create.published # => true
-        def default_scope(options = {})
-          reset_scoped_methods
-          default_scoping = self.default_scoping.dup
-          self.default_scoping = default_scoping << construct_finder_arel(options, default_scoping.pop)
+        #
+        # You can also use <tt>default_scope</tt> with a block, in order to have it lazily evaluated:
+        #
+        #   class Article < ActiveRecord::Base
+        #     default_scope { where(:published_at => Time.now - 1.week) }
+        #   end
+        #
+        # (You can also pass any object which responds to <tt>call</tt> to the <tt>default_scope</tt>
+        # macro, and it will be called when building the default scope.)
+        #
+        # If you use multiple <tt>default_scope</tt> declarations in your model then they will
+        # be merged together:
+        #
+        #   class Article < ActiveRecord::Base
+        #     default_scope where(:published => true)
+        #     default_scope where(:rating => 'G')
+        #   end
+        #
+        #   Article.all # => SELECT * FROM articles WHERE published = true AND rating = 'G'
+        #
+        # This is also the case with inheritance and module includes where the parent or module
+        # defines a <tt>default_scope</tt> and the child or including class defines a second one.
+        #
+        # If you need to do more complex things with a default scope, you can alternatively
+        # define it as a class method:
+        #
+        #   class Article < ActiveRecord::Base
+        #     def self.default_scope
+        #       # Should return a scope, you can call 'super' here etc.
+        #     end
+        #   end
+        def default_scope(scope = {})
+          scope = Proc.new if block_given?
+          self.default_scopes = default_scopes + [scope]
         end
 
-        def current_scoped_methods #:nodoc:
-          method = scoped_methods.last
-          if method.respond_to?(:call)
-            relation.scoping { method.call }
-          else
-            method
+        # The apply_default_scope flag is used to prevent an infinite recursion situation where
+        # a default scope references a scope which has a default scope which references a scope...
+        def build_default_scope #:nodoc:
+          return unless apply_default_scope
+          self.apply_default_scope = false
+
+          if method(:default_scope).owner != Base.singleton_class
+            default_scope
+          elsif default_scopes.any?
+            default_scopes.inject(relation) do |default_scope, scope|
+              if scope.is_a?(Hash)
+                default_scope.apply_finder_options(scope)
+              elsif !scope.is_a?(Relation) && scope.respond_to?(:call)
+                default_scope.merge(scope.call)
+              else
+                default_scope.merge(scope)
+              end
+            end
           end
-        end
-
-        def reset_scoped_methods #:nodoc:
-          Thread.current[:"#{self}_scoped_methods"] = nil
+        ensure
+          self.apply_default_scope = true
         end
 
         # Returns the class type of the record using the current module as a prefix. So descendants of
@@ -1321,7 +1407,7 @@ MSG
         def sanitize_sql_hash_for_conditions(attrs, default_table_name = self.table_name)
           attrs = expand_hash_conditions_for_aggregates(attrs)
 
-          table = Arel::Table.new(self.table_name, :engine => arel_engine, :as => default_table_name)
+          table = Arel::Table.new(table_name).alias(default_table_name)
           viz = Arel::Visitors.for(arel_engine)
           PredicateBuilder.build_from_hash(arel_engine, attrs, table).map { |b|
             viz.accept b
@@ -1338,7 +1424,7 @@ MSG
           end.join(', ')
         end
 
-        # Accepts an array of conditions.  The array has each value
+        # Accepts an array of conditions. The array has each value
         # sanitized and interpolated into the SQL statement.
         #   ["name='%s' and group_id='%s'", "foo'bar", 4]  returns  "name='foo''bar' and group_id='4'"
         def sanitize_sql_array(ary)
@@ -1422,7 +1508,20 @@ MSG
       # attributes but not yet saved (pass a hash with key names matching the associated table column names).
       # In both instances, valid attribute keys are determined by the column names of the associated table --
       # hence you can't have attributes that aren't part of the table columns.
-      def initialize(attributes = nil)
+      #
+      # +initialize+ respects mass-assignment security and accepts either +:as+ or +:without_protection+ options
+      # in the +options+ parameter.
+      #
+      # ==== Examples
+      #   # Instantiates a single new object
+      #   User.new(:first_name => 'Jamie')
+      #
+      #   # Instantiates a single new object using the :admin mass-assignment security role
+      #   User.new({ :first_name => 'Jamie', :is_admin => true }, :as => :admin)
+      #
+      #   # Instantiates a single new object bypassing mass-assignment security
+      #   User.new({ :first_name => 'Jamie', :is_admin => true }, :without_protection => true)
+      def initialize(attributes = nil, options = {})
         @attributes = attributes_from_column_definition
         @association_cache = {}
         @aggregation_cache = {}
@@ -1438,7 +1537,8 @@ MSG
         set_serialized_attributes
 
         populate_with_current_scope_attributes
-        self.attributes = attributes unless attributes.nil?
+
+        assign_attributes(attributes, options) if attributes
 
         result = yield self if block_given?
         run_callbacks :initialize
@@ -1446,7 +1546,7 @@ MSG
       end
 
       # Populate +coder+ with attributes about this record that should be
-      # serialized.  The structure of +coder+ defined in this method is
+      # serialized. The structure of +coder+ defined in this method is
       # guaranteed to match the structure of +coder+ passed to the +init_with+
       # method.
       #
@@ -1461,8 +1561,8 @@ MSG
         coder['attributes'] = attributes
       end
 
-      # Initialize an empty model object from +coder+.  +coder+ must contain
-      # the attributes necessary for initializing an empty model object.  For
+      # Initialize an empty model object from +coder+. +coder+ must contain
+      # the attributes necessary for initializing an empty model object. For
       # example:
       #
       #   class Post < ActiveRecord::Base
@@ -1559,11 +1659,8 @@ MSG
       # Allows you to set all the attributes at once by passing in a hash with keys
       # matching the attribute names (which again matches the column names).
       #
-      # If +guard_protected_attributes+ is true (the default), then sensitive
-      # attributes can be protected from this form of mass-assignment by using
-      # the +attr_protected+ macro. Or you can alternatively specify which
-      # attributes *can* be accessed with the +attr_accessible+ macro. Then all the
-      # attributes not included in that won't be allowed to be mass-assigned.
+      # If any attributes are protected by either +attr_protected+ or
+      # +attr_accessible+ then only settable attributes will be assigned.
       #
       #   class User < ActiveRecord::Base
       #     attr_protected :is_admin
@@ -1573,15 +1670,50 @@ MSG
       #   user.attributes = { :username => 'Phusion', :is_admin => true }
       #   user.username   # => "Phusion"
       #   user.is_admin?  # => false
-      #
-      #   user.send(:attributes=, { :username => 'Phusion', :is_admin => true }, false)
-      #   user.is_admin?  # => true
-      def attributes=(new_attributes, guard_protected_attributes = true)
+      def attributes=(new_attributes)
         return unless new_attributes.is_a?(Hash)
+
+        assign_attributes(new_attributes)
+      end
+
+      # Allows you to set all the attributes for a particular mass-assignment
+      # security role by passing in a hash of attributes with keys matching
+      # the attribute names (which again matches the column names) and the role
+      # name using the :as option.
+      #
+      # To bypass mass-assignment security you can use the :without_protection => true
+      # option.
+      #
+      #   class User < ActiveRecord::Base
+      #     attr_accessible :name
+      #     attr_accessible :name, :is_admin, :as => :admin
+      #   end
+      #
+      #   user = User.new
+      #   user.assign_attributes({ :name => 'Josh', :is_admin => true })
+      #   user.name       # => "Josh"
+      #   user.is_admin?  # => false
+      #
+      #   user = User.new
+      #   user.assign_attributes({ :name => 'Josh', :is_admin => true }, :as => :admin)
+      #   user.name       # => "Josh"
+      #   user.is_admin?  # => true
+      #
+      #   user = User.new
+      #   user.assign_attributes({ :name => 'Josh', :is_admin => true }, :without_protection => true)
+      #   user.name       # => "Josh"
+      #   user.is_admin?  # => true
+      def assign_attributes(new_attributes, options = {})
+        return unless new_attributes
+
         attributes = new_attributes.stringify_keys
+        role = options[:as] || :default
 
         multi_parameter_attributes = []
-        attributes = sanitize_for_mass_assignment(attributes) if guard_protected_attributes
+
+        unless options[:without_protection]
+          attributes = sanitize_for_mass_assignment(attributes, role)
+        end
 
         attributes.each do |k, v|
           if k.include?("(")
@@ -1725,12 +1857,16 @@ MSG
 
       # Returns the contents of the record as a nicely formatted string.
       def inspect
-        attributes_as_nice_string = self.class.column_names.collect { |name|
-          if has_attribute?(name)
-            "#{name}: #{attribute_for_inspect(name)}"
-          end
-        }.compact.join(", ")
-        "#<#{self.class} #{attributes_as_nice_string}>"
+        inspection = if @attributes
+                       self.class.column_names.collect { |name|
+                         if has_attribute?(name)
+                           "#{name}: #{attribute_for_inspect(name)}"
+                         end
+                       }.compact.join(", ")
+                     else
+                       "not initialized"
+                     end
+        "#<#{self.class} #{inspection}>"
       end
 
     protected
@@ -1833,32 +1969,9 @@ MSG
         errors = []
         callstack.each do |name, values_with_empty_parameters|
           begin
-            klass = (self.class.reflect_on_aggregation(name.to_sym) || column_for_attribute(name)).klass
-            # in order to allow a date to be set without a year, we must keep the empty values.
-            # Otherwise, we wouldn't be able to distinguish it from a date with an empty day.
-            values = values_with_empty_parameters.reject { |v| v.nil? }
-
-            if values.empty?
-              send(name + "=", nil)
-            else
-
-              value = if Time == klass
-                instantiate_time_object(name, values)
-              elsif Date == klass
-                begin
-                  values = values_with_empty_parameters.collect do |v| v.nil? ? 1 : v end
-                  Date.new(*values)
-                rescue ArgumentError => ex # if Date.new raises an exception on an invalid date
-                  instantiate_time_object(name, values).to_date # we instantiate Time object and convert it back to a date thus using Time's logic in handling invalid dates
-                end
-              else
-                klass.new(*values)
-              end
-
-              send(name + "=", value)
-            end
+            send(name + "=", read_value_from_parameter(name, values_with_empty_parameters))
           rescue => ex
-            errors << AttributeAssignmentError.new("error on assignment #{values.inspect} to #{name}", ex, name)
+            errors << AttributeAssignmentError.new("error on assignment #{values_with_empty_parameters.values.inspect} to #{name}", ex, name)
           end
         end
         unless errors.empty?
@@ -1866,19 +1979,65 @@ MSG
         end
       end
 
+      def read_value_from_parameter(name, values_hash_from_param)
+        klass = (self.class.reflect_on_aggregation(name.to_sym) || column_for_attribute(name)).klass
+        if values_hash_from_param.values.all?{|v|v.nil?}
+          nil
+        elsif klass == Time
+          read_time_parameter_value(name, values_hash_from_param)
+        elsif klass == Date
+          read_date_parameter_value(name, values_hash_from_param)
+        else
+          read_other_parameter_value(klass, name, values_hash_from_param)
+        end
+      end
+
+      def read_time_parameter_value(name, values_hash_from_param)
+        # If Date bits were not provided, error
+        raise "Missing Parameter" if [1,2,3].any?{|position| !values_hash_from_param.has_key?(position)}
+        max_position = extract_max_param_for_multiparameter_attributes(values_hash_from_param, 6)
+        set_values = (1..max_position).collect{|position| values_hash_from_param[position] }
+        # If Date bits were provided but blank, then default to 1
+        # If Time bits are not there, then default to 0
+        [1,1,1,0,0,0].each_with_index{|v,i| set_values[i] = set_values[i].blank? ? v : set_values[i]}
+        instantiate_time_object(name, set_values)
+      end
+
+      def read_date_parameter_value(name, values_hash_from_param)
+        set_values = (1..3).collect{|position| values_hash_from_param[position].blank? ? 1 : values_hash_from_param[position]}
+        begin
+          Date.new(*set_values)
+        rescue ArgumentError => ex # if Date.new raises an exception on an invalid date
+          instantiate_time_object(name, set_values).to_date # we instantiate Time object and convert it back to a date thus using Time's logic in handling invalid dates
+        end
+      end
+
+      def read_other_parameter_value(klass, name, values_hash_from_param)
+        max_position = extract_max_param_for_multiparameter_attributes(values_hash_from_param)
+        values = (1..max_position).collect do |position|
+          raise "Missing Parameter" if !values_hash_from_param.has_key?(position)
+          values_hash_from_param[position]
+        end
+        klass.new(*values)
+      end
+
+      def extract_max_param_for_multiparameter_attributes(values_hash_from_param, upper_cap = 100)
+        [values_hash_from_param.keys.max,upper_cap].min
+      end
+
       def extract_callstack_for_multiparameter_attributes(pairs)
         attributes = { }
 
-        for pair in pairs
+        pairs.each do |pair|
           multiparameter_name, value = pair
           attribute_name = multiparameter_name.split("(").first
-          attributes[attribute_name] = [] unless attributes.include?(attribute_name)
+          attributes[attribute_name] = {} unless attributes.include?(attribute_name)
 
           parameter_value = value.empty? ? nil : type_cast_attribute_value(multiparameter_name, value)
-          attributes[attribute_name] << [ find_parameter_position(multiparameter_name), parameter_value ]
+          attributes[attribute_name][find_parameter_position(multiparameter_name)] ||= parameter_value
         end
 
-        attributes.each { |name, values| attributes[name] = values.sort_by{ |v| v.first }.collect { |v| v.last } }
+        attributes
       end
 
       def type_cast_attribute_value(multiparameter_name, value)
@@ -1886,7 +2045,7 @@ MSG
       end
 
       def find_parameter_position(multiparameter_name)
-        multiparameter_name.scan(/\(([0-9]*).*\)/).first.first
+        multiparameter_name.scan(/\(([0-9]*).*\)/).first.first.to_i
       end
 
       # Returns a comma-separated pair list, like "key1 = val1, key2 = val2".
@@ -1915,11 +2074,8 @@ MSG
       end
 
       def populate_with_current_scope_attributes
-        if scope = self.class.send(:current_scoped_methods)
-          create_with = scope.scope_for_create
-          create_with.each { |att,value|
-            respond_to?("#{att}=") && send("#{att}=", value)
-          }
+        self.class.scoped.scope_for_create.each do |att,value|
+          respond_to?("#{att}=") && send("#{att}=", value)
         end
       end
 
@@ -1950,7 +2106,7 @@ MSG
     include AttributeMethods::Dirty
     include ActiveModel::MassAssignmentSecurity
     include Callbacks, ActiveModel::Observing, Timestamp
-    include Associations, AssociationPreload, NamedScope
+    include Associations, NamedScope
     include IdentityMap
     include ActiveModel::SecurePassword
 

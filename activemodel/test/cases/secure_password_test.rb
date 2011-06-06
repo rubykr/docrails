@@ -9,6 +9,18 @@ class SecurePasswordTest < ActiveModel::TestCase
     @user = User.new
   end
 
+  test "blank password" do
+    user = User.new
+    user.password = ''
+    assert !user.valid?, 'user should be invalid'
+  end
+
+  test "nil password" do
+    user = User.new
+    user.password = nil
+    assert !user.valid?, 'user should be invalid'
+  end
+
   test "password must be present" do
     assert !@user.valid?
     assert_equal 1, @user.errors.size
@@ -33,13 +45,14 @@ class SecurePasswordTest < ActiveModel::TestCase
   end
 
   test "visitor#password_digest should be protected against mass assignment" do
-    assert Visitor.active_authorizer.kind_of?(ActiveModel::MassAssignmentSecurity::BlackList)
-    assert Visitor.active_authorizer.include?(:password_digest)
+    assert Visitor.active_authorizers[:default].kind_of?(ActiveModel::MassAssignmentSecurity::BlackList)
+    assert Visitor.active_authorizers[:default].include?(:password_digest)
   end
 
   test "Administrator's mass_assignment_authorizer should be WhiteList" do
-    assert Administrator.active_authorizer.kind_of?(ActiveModel::MassAssignmentSecurity::WhiteList)
-    assert !Administrator.active_authorizer.include?(:password_digest)
-    assert Administrator.active_authorizer.include?(:name)
+    active_authorizer = Administrator.active_authorizers[:default]
+    assert active_authorizer.kind_of?(ActiveModel::MassAssignmentSecurity::WhiteList)
+    assert !active_authorizer.include?(:password_digest)
+    assert active_authorizer.include?(:name)
   end
 end

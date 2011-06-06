@@ -57,7 +57,11 @@ Many web applications have an authentication system: a user provides a user name
 
 Hence, the cookie serves as temporary authentication for the web application. Everyone who seizes a cookie from someone else, may use the web application as this user – with possibly severe consequences. Here are some ways to hijack a session, and their countermeasures:
 
-* Sniff the cookie in an insecure network. A wireless LAN can be an example of such a network. In an unencrypted wireless LAN it is especially easy to listen to the traffic of all connected clients. This is one more reason not to work from a coffee shop. For the web application builder this means to _(highlight)provide a secure connection over SSL_.
+* Sniff the cookie in an insecure network. A wireless LAN can be an example of such a network. In an unencrypted wireless LAN it is especially easy to listen to the traffic of all connected clients. This is one more reason not to work from a coffee shop. For the web application builder this means to _(highlight)provide a secure connection over SSL_. In Rails 3.1 and later, this could be accomplished by always forcing SSL connection in your application config file:
+
+<ruby>
+config.force_ssl = true
+</ruby>
 
 * Most people don't clear out the cookies after working at a public terminal. So if the last user didn't log out of a web application, you would be able to use it as this user. Provide the user with a _(highlight)log-out button_ in the web application, and _(highlight)make it prominent_.
 
@@ -143,7 +147,7 @@ reset_session
 
 If you use the popular RestfulAuthentication plugin for user management, add reset_session to the SessionsController#create action. Note that this removes any value from the session, _(highlight)you have to transfer them to the new session_.
 
-Another countermeasure is to _(highlight)save user-specific properties in the session_, verify them every time a request comes in, and deny access, if the information does not match. Such properties could be the remote IP address or the user agent (the web browser name), though the latter is less user-specific. When saving the IP address, you have to bear in mind that there are Internet service providers or large organizations that put their users behind proxies. _(highlight)These might change over the course of a session_, so these users  will not be able to use your application, or only in a limited way.
+Another countermeasure is to _(highlight)save user-specific properties in the session_, verify them every time a request comes in, and deny access, if the information does not match. Such properties could be the remote IP address or the user agent (the web browser name), though the latter is less user-specific. When saving the IP address, you have to bear in mind that there are Internet service providers or large organizations that put their users behind proxies. _(highlight)These might change over the course of a session_, so these users will not be able to use your application, or only in a limited way.
 
 h4. Session Expiry
 
@@ -207,15 +211,7 @@ The HTTP protocol basically provides two main types of requests - GET and POST (
 
 If your web application is RESTful, you might be used to additional HTTP verbs, such as PUT or DELETE. Most of today‘s web browsers, however do not support them - only GET and POST. Rails uses a hidden +_method+ field to handle this barrier.
 
-_(highlight)The verify method in a controller can make sure that specific actions may not be used over GET_. Here is an example to verify the use of the transfer action over POST. If the action comes in using any other verb, it redirects to the list action.
-
-<ruby>
-verify :method => :post, :only => [:transfer], :redirect_to => {:action => :list}
-</ruby>
-
-With this precaution, the attack from above will not work, because the browser sends a GET request for images, which will not be accepted by the web application.
-
-But this was only the first step, because _(highlight)POST requests can be sent automatically, too_. Here is an example for a link which displays www.harmless.com as destination in the browser's status bar. In fact it dynamically creates a new form that sends a POST request.
+_(highlight)POST requests can be sent automatically, too_. Here is an example for a link which displays www.harmless.com as destination in the browser's status bar. In fact it dynamically creates a new form that sends a POST request.
 
 <html>
 <a href="http://www.harmless.com/" onclick="
@@ -234,7 +230,7 @@ Or the attacker places the code into the onmouseover event handler of an image:
 <img src="http://www.harmless.com/img" width="400" height="400" onmouseover="..." />
 </html>
 
-There are many other possibilities, including Ajax to attack the victim in the background. The  _(highlight)solution to this is including a security token in non-GET requests_ which check on the server-side. In Rails 2 or higher, this is a one-liner in the application controller:
+There are many other possibilities, including Ajax to attack the victim in the background. The _(highlight)solution to this is including a security token in non-GET requests_ which check on the server-side. In Rails 2 or higher, this is a one-liner in the application controller:
 
 <ruby>
 protect_from_forgery :secret => "123456789012345678901234567890..."
@@ -282,7 +278,7 @@ h4. File Uploads
 
 Many web applications allow users to upload files. _(highlight)File names, which the user may choose (partly), should always be filtered_ as an attacker could use a malicious file name to overwrite any file on the server. If you store file uploads at /var/www/uploads, and the user enters a file name like “../../../etc/passwd”, it may overwrite an important file. Of course, the Ruby interpreter would need the appropriate permissions to do so – one more reason to run web servers, database servers and other programs as a less privileged Unix user.
 
-When filtering user input file names, _(highlight)don't try to remove malicious parts_. Think of a situation where the web application removes all “../” in a file name and an attacker uses a string such as “....//” - the result will be “../”. It is best to use a whitelist approach, which _(highlight)checks for the validity of a file name with a set of accepted characters_. This is opposed to a blacklist approach which attempts to remove not allowed characters. In case it isn't a valid file name, reject it (or replace not accepted characters), but don't remove them. Here is the file name sanitizer from the "attachment_fu plugin":http://github.com/technoweenie/attachment_fu/tree/master:
+When filtering user input file names, _(highlight)don't try to remove malicious parts_. Think of a situation where the web application removes all “../” in a file name and an attacker uses a string such as “....//” - the result will be “../”. It is best to use a whitelist approach, which _(highlight)checks for the validity of a file name with a set of accepted characters_. This is opposed to a blacklist approach which attempts to remove not allowed characters. In case it isn't a valid file name, reject it (or replace not accepted characters), but don't remove them. Here is the file name sanitizer from the "attachment_fu plugin":https://github.com/technoweenie/attachment_fu/tree/master:
 
 <ruby>
 def sanitize_filename(filename)
@@ -376,7 +372,7 @@ def signup
 end
 </ruby>
 
-Mass-assignment saves you much work, because you don't have to set each value individually. Simply pass a hash to the new() method, or assign attributes=(attributes) a hash value, to set the model's attributes to the values in the hash. The problem is that it is often used in conjunction with the parameters (params) hash available in the controller, which may be manipulated by an attacker. He may do so by changing the URL like this:
+Mass-assignment saves you much work, because you don't have to set each value individually. Simply pass a hash to the +new+ method, or +assign_attributes=+ a hash value, to set the model's attributes to the values in the hash. The problem is that it is often used in conjunction with the parameters (params) hash available in the controller, which may be manipulated by an attacker. He may do so by changing the URL like this:
 
 <pre>
 "name":http://www.example.com/user/signup?user[name]=ow3ned&user[admin]=1
@@ -390,7 +386,7 @@ params[:user] # => {:name => “ow3ned”, :admin => true}
 
 So if you create a new user using mass-assignment, it may be too easy to become an administrator.
 
-Note that this vulnerability is not restricted to database columns.  Any setter method, unless explicitly protected, is accessible via the <tt>attributes=</tt> method.  In fact, this vulnerability is extended even further with the introduction of nested mass assignment (and nested object forms) in Rails 2.3.  The +accepts_nested_attributes_for+ declaration provides us the ability to extend mass assignment to model associations (+has_many+, +has_one+, +has_and_belongs_to_many+).  For example:
+Note that this vulnerability is not restricted to database columns. Any setter method, unless explicitly protected, is accessible via the <tt>attributes=</tt> method. In fact, this vulnerability is extended even further with the introduction of nested mass assignment (and nested object forms) in Rails 2.3+. The +accepts_nested_attributes_for+ declaration provides us the ability to extend mass assignment to model associations (+has_many+, +has_one+, +has_and_belongs_to_many+). For example:
 
 <ruby>
   class Person < ActiveRecord::Base
@@ -414,10 +410,17 @@ To avoid this, Rails provides two class methods in your Active Record class to c
 attr_protected :admin
 </ruby>
 
++attr_protected+ also optionally takes a role option using :as which allows you to define multiple mass-assignment groupings. If no role is defined then attributes will be added to the :default role.
+
+<ruby>
+attr_protected :last_login, :as => :admin
+</ruby>
+
 A much better way, because it follows the whitelist-principle, is the +attr_accessible+ method. It is the exact opposite of +attr_protected+, because _(highlight)it takes a list of attributes that will be accessible_. All other attributes will be protected. This way you won't forget to protect attributes when adding new ones in the course of development. Here is an example:
 
 <ruby>
 attr_accessible :name
+attr_accessible :name, :is_admin, :as => :admin
 </ruby>
 
 If you want to set a protected attribute, you will to have to assign it individually:
@@ -430,13 +433,43 @@ params[:user] # => {:name => "ow3ned", :admin => true}
 @user.admin # => true
 </ruby>
 
-A more paranoid technique to protect your whole project would be to enforce that all models whitelist their accessible attributes.  This can be easily achieved with a very simple initializer:
+When assigning attributes in Active Record using +attributes=+ the :default role will be used. To assign attributes using different roles you should use +assign_attributes+ which accepts an optional :as options parameter. If no :as option is provided then the :default role will be used. You can also bypass mass-assignment security by using the +:without_protection+ option. Here is an example:
 
 <ruby>
-ActiveRecord::Base.send(:attr_accessible, nil)
+@user = User.new
+
+@user.assign_attributes({ :name => 'Josh', :is_admin => true })
+@user.name # => Josh
+@user.is_admin # => false
+
+@user.assign_attributes({ :name => 'Josh', :is_admin => true }, :as => :admin)
+@user.name # => Josh
+@user.is_admin # => true
+
+@user.assign_attributes({ :name => 'Josh', :is_admin => true }, :without_protection => true)
+@user.name # => Josh
+@user.is_admin # => true
 </ruby>
 
-This will create an empty whitelist of attributes available for mass assignment for all models in your app.  As such, your models will need to explicitly whitelist accessible parameters by using an +attr_accessible+ declaration.  This technique is best applied at the start of a new project.  However, for an existing project with a thorough set of functional tests, it should be straightforward and relatively quick to insert this initializer, run your tests, and expose each attribute (via +attr_accessible+) as dictated by your failing tests.
+In a similar way, +new+, +create+, <tt>create!</tt>, +update_attributes+, and +update_attributes!+ methods all respect mass-assignment security and accept either +:as+ or +:without_protection+ options. For example:
+
+<ruby>
+@user = User.new({ :name => 'Sebastian', :is_admin => true }, :as => :admin)
+@user.name # => Sebastian
+@user.is_admin # => true
+
+@user = User.create({ :name => 'Sebastian', :is_admin => true }, :without_protection => true)
+@user.name # => Sebastian
+@user.is_admin # => true
+</ruby>
+
+A more paranoid technique to protect your whole project would be to enforce that all models define their accessible attributes. This can be easily achieved with a very simple application config option of:
+
+<ruby>
+config.active_record.whitelist_attributes = true
+</ruby>
+
+This will create an empty whitelist of attributes available for mass-assignment for all models in your app. As such, your models will need to explicitly whitelist or blacklist accessible parameters by using an +attr_accessible+ or +attr_protected+ declaration. This technique is best applied at the start of a new project. However, for an existing project with a thorough set of functional tests, it should be straightforward and relatively quick to use this application config option; run your tests, and expose each attribute (via +attr_accessible+ or +attr_protected+) as dictated by your failing tests.
 
 h3. User Management
 
@@ -507,7 +540,7 @@ Most bots are really dumb, they crawl the web and put their spam into every form
 Here are some ideas how to hide honeypot fields by JavaScript and/or CSS:
 
 * position the fields off of the visible area of the page
-* make the elements very small or colour them the same as the background of the page
+* make the elements very small or color them the same as the background of the page
 * leave the fields displayed, but tell humans to leave them blank
 
 The most simple negative CAPTCHA is one hidden honeypot field. On the server side, you will check the value of the field: If it contains any text, it must be a bot. Then, you can either ignore the post or return a positive result, but not saving the post to the database. This way the bot will be satisfied and moves on. You can do this with annoying users, too.
@@ -534,7 +567,7 @@ h4. Good Passwords
 
 -- _Do you find it hard to remember all your passwords? Don't write them down, but use the initial letters of each word in an easy to remember sentence._
 
-Bruce Schneier, a security technologist, "has analysed":http://www.schneier.com/blog/archives/2006/12/realworld_passw.html 34,000 real-world user names and passwords from the MySpace phishing attack mentioned <a href="#examples-from-the-underground">below</a>. It turns out that most of the passwords are quite easy to crack. The 20 most common passwords are:
+Bruce Schneier, a security technologist, "has analyzed":http://www.schneier.com/blog/archives/2006/12/realworld_passw.html 34,000 real-world user names and passwords from the MySpace phishing attack mentioned <a href="#examples-from-the-underground">below</a>. It turns out that most of the passwords are quite easy to crack. The 20 most common passwords are:
 
 password1, abc123, myspace1, password, blink182, qwerty1, ****you, 123abc, baseball1, football1, 123456, soccer, monkey1, liverpool1, princess1, jordan23, slipknot1, superman1, iloveyou1, and monkey.
 
@@ -852,7 +885,7 @@ The "moz-binding":http://www.securiteam.com/securitynews/5LP051FHPE.html CSS pro
 
 h5(#css-injection-countermeasures). Countermeasures
 
-This example, again, showed that a blacklist filter is never complete. However, as custom CSS in web applications is a quite rare feature, I am not aware of a whitelist CSS filter. _(highlight)If you want to allow custom colours or images, you can allow the user to choose them and build the CSS in the web application_. Use Rails' +sanitize()+ method as a model for a whitelist CSS filter, if you really need one.
+This example, again, showed that a blacklist filter is never complete. However, as custom CSS in web applications is a quite rare feature, I am not aware of a whitelist CSS filter. _(highlight)If you want to allow custom colors or images, you can allow the user to choose them and build the CSS in the web application_. Use Rails' +sanitize()+ method as a model for a whitelist CSS filter, if you really need one.
 
 h4. Textile Injection
 
@@ -888,12 +921,6 @@ h4. Ajax Injection
 -- _The same security precautions have to be taken for Ajax actions as for “normal” ones. There is at least one exception, however: The output has to be escaped in the controller already, if the action doesn't render a view._
 
 If you use the "in_place_editor plugin":http://dev.rubyonrails.org/browser/plugins/in_place_editing, or actions that return a string, rather than rendering a view, _(highlight)you have to escape the return value in the action_. Otherwise, if the return value contains a XSS string, the malicious code will be executed upon return to the browser. Escape any input value using the h() method.
-
-h4. RJS Injection
-
--- _Don't forget to escape in JavaScript (RJS) templates, too._
-
-The RJS API generates blocks of JavaScript code based on Ruby code, thus allowing you to manipulate a view or parts of a view from the server side. <em class="highlight">If you allow user input in RJS templates, do escape it using +escape_javascript()+ within JavaScript functions, and in HTML parts using +h()+</em>. Otherwise an attacker could execute arbitrary JavaScript.
 
 h4. Command Line Injection
 

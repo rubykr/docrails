@@ -1,4 +1,6 @@
 require 'active_support/core_ext/object/blank'
+require 'active_support/core_ext/module/delegation'
+require 'active_support/core_ext/module/remove_method'
 require 'action_controller'
 require 'action_controller/test_case'
 require 'action_view'
@@ -43,6 +45,7 @@ module ActionView
       include AbstractController::Helpers
       include ActionView::Helpers
 
+      delegate :lookup_context, :to => :controller
       attr_accessor :controller, :output_buffer, :rendered
 
       module ClassMethods
@@ -121,13 +124,13 @@ module ActionView
       # Support the selector assertions
       #
       # Need to experiment if this priority is the best one: rendered => output_buffer
-      def response_from_page_or_rjs
+      def response_from_page
         HTML::Document.new(@rendered.blank? ? @output_buffer : @rendered).root
       end
 
       def say_no_to_protect_against_forgery!
         _helpers.module_eval do
-          remove_method :protect_against_forgery? if method_defined?(:protect_against_forgery?)
+          remove_possible_method :protect_against_forgery?
           def protect_against_forgery?
             false
           end
@@ -147,9 +150,19 @@ module ActionView
       module Locals
         attr_accessor :locals
 
-        def _render_partial(options)
-          locals[options[:partial]] = options[:locals]
-          super(options)
+        def render(options = {}, local_assigns = {})
+          case options
+          when Hash
+            if block_given?
+              locals[options[:layout]] = options[:locals]
+            elsif options.key?(:partial)
+              locals[options[:partial]] = options[:locals]
+            end
+          else
+            locals[options] = local_assigns
+          end
+
+          super
         end
       end
 
@@ -185,6 +198,7 @@ module ActionView
         @request
         @routes
         @templates
+        @options
         @test_passed
         @view
         @view_context_class
@@ -202,12 +216,6 @@ module ActionView
         Hash[_user_defined_ivars.map do |var|
           [var[1, var.length].to_sym, instance_variable_get(var)]
         end]
-      end
-
-      def _assigns
-        ActiveSupport::Deprecation.warn "ActionView::TestCase#_assigns is deprecated and will be removed in future versions. " <<
-          "Please use view_assigns instead."
-        view_assigns
       end
 
       def _routes

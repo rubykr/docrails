@@ -1,3 +1,4 @@
+require 'thread'
 require 'active_support/core_ext/class/attribute_accessors'
 
 module ActiveSupport
@@ -40,19 +41,24 @@ module ActiveSupport
 
     def initialize(log, level = DEBUG)
       @level         = level
-      @buffer        = {}
+      @buffer        = Hash.new { |h,k| h[k] = [] }
       @auto_flushing = 1
       @guard = Mutex.new
 
       if log.respond_to?(:write)
         @log = log
       elsif File.exist?(log)
-        @log = open(log, (File::WRONLY | File::APPEND))
-        @log.sync = true
+        @log = open_log(log, (File::WRONLY | File::APPEND))
       else
         FileUtils.mkdir_p(File.dirname(log))
-        @log = open(log, (File::WRONLY | File::APPEND | File::CREAT))
-        @log.sync = true
+        @log = open_log(log, (File::WRONLY | File::APPEND | File::CREAT))
+      end
+    end
+
+    def open_log(log, mode)
+      open(log, mode).tap do |open_log|
+        open_log.set_encoding(Encoding::BINARY) if open_log.respond_to?(:set_encoding)
+        open_log.sync = true
       end
     end
 
@@ -71,7 +77,7 @@ module ActiveSupport
     # def info
     # def warn
     # def debug
-    for severity in Severity.constants
+    Severity.constants.each do |severity|
       class_eval <<-EOT, __FILE__, __LINE__ + 1
         def #{severity.downcase}(message = nil, progname = nil, &block) # def debug(message = nil, progname = nil, &block)
           add(#{severity}, message, progname, &block)                   #   add(DEBUG, message, progname, &block)
@@ -99,13 +105,8 @@ module ActiveSupport
 
     def flush
       @guard.synchronize do
-        unless buffer.empty?
-          old_buffer = buffer
-          all_content = StringIO.new
-          old_buffer.each do |content|
-            all_content << content
-          end
-          @log.write(all_content.string)
+        buffer.each do |content|
+          @log.write(content)
         end
 
         # Important to do this even if buffer was empty or else @buffer will
@@ -126,7 +127,7 @@ module ActiveSupport
       end
 
       def buffer
-        @buffer[Thread.current] ||= []
+        @buffer[Thread.current]
       end
 
       def clear_buffer

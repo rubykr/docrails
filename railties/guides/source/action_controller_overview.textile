@@ -110,6 +110,32 @@ When this form is submitted, the value of +params[:client]+ will be <tt>{"name" 
 
 Note that the +params+ hash is actually an instance of +HashWithIndifferentAccess+ from Active Support, which acts like a hash that lets you use symbols and strings interchangeably as keys.
 
+h4. JSON/XML parameters
+
+If you're writing a web service application, you might find yourself more comfortable on accepting parameters in JSON or XML format. Rails will automatically convert your parameters into +params+ hash, which you'll be able to access like you would normally do with form data.
+
+So for example, if you are sending this JSON parameter:
+
+<pre>
+{ "company": { "name": "acme", "address": "123 Carrot Street" } }
+</pre>
+
+You'll get <tt>params[:company]</tt> as <tt>{ :name => "acme", "address" => "123 Carrot Street" }</tt>.
+
+Also, if you've turned on +config.wrap_parameters+ in your initializer or calling +wrap_parameters+ in your controller, you can safely omit the root element in the JSON/XML parameter. The parameters will be cloned and wrapped in the key according to your controller's name by default. So the above parameter can be written as:
+
+<pre>
+{ "name": "acme", "address": "123 Carrot Street" }
+</pre>
+
+And assume that you're sending the data to +CompaniesController+, it would then be wrapped in +:company+ key like this:
+
+<ruby>
+{ :name => "acme", :address => "123 Carrot Street", :company => { :name => "acme", :address => "123 Carrot Street" }}
+</ruby>
+
+You can customize the name of the key or specific parameters you want to wrap by consulting the "API documentation":http://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html
+
 h4. Routing Parameters
 
 The +params+ hash will always contain the +:controller+ and +:action+ keys, but you should use the methods +controller_name+ and +action_name+ instead to access these values. Any other parameters defined by the routing, such as +:id+ will also be available. As an example, consider a listing of clients where the list can show either active or inactive clients. We can add a route which captures the +:status+ parameter in a "pretty" URL:
@@ -368,7 +394,7 @@ class UsersController < ApplicationController
     respond_to do |format|
       format.html # index.html.erb
       format.xml  { render :xml => @users}
-      format.json  { render :json => @users}
+      format.json { render :json => @users}
     end
   end
 end
@@ -423,26 +449,35 @@ Now, the +LoginsController+'s +new+ and +create+ actions will work as before wit
 
 h4. After Filters and Around Filters
 
-In addition to before filters, you can run filters after an action has run or both before and after. The after filter is similar to the before filter, but because the action has already been run it has access to the response data that's about to be sent to the client. Obviously, after filters can not stop the action from running.
+In addition to before filters, you can also run filters after an action has been executed, or both before and after.
 
-Around filters are responsible for running the action, but they can choose not to, which is the around filter's way of stopping it.
+After filters are similar to before filters, but because the action has already been run they have access to the response data that's about to be sent to the client. Obviously, after filters cannot stop the action from running.
+
+Around filters are responsible for running their associated actions by yielding, similar to how Rack middlewares work.
+
+For example, in a website where changes have an approval workflow an administrator could be able to preview them easily, just apply them within a transaction:
 
 <ruby>
-# Example taken from the Rails API filter documentation:
-# http://ap.rubyonrails.org/classes/ActionController/Filters/ClassMethods.html
-class ApplicationController < ActionController::Base
-  around_filter :catch_exceptions
+class ChangesController < ActionController::Base
+  around_filter :wrap_in_transaction, :only => :show
 
   private
 
-  def catch_exceptions
-    yield
-  rescue => exception
-    logger.debug "Caught exception! #{exception}"
-    raise
+  def wrap_in_transaction
+    ActiveRecord::Base.transaction do
+      begin
+        yield
+      ensure
+        raise ActiveRecord::Rollback
+      end
+    end
   end
 end
 </ruby>
+
+Note that an around filter wraps also rendering. In particular, if in the example above the view itself reads from the database via a scope or whatever, it will do so within the transaction and thus present the data to preview.
+
+They can choose not to yield and build the response themselves, in which case the action is not run.
 
 h4. Other Ways to Use Filters
 
@@ -478,45 +513,6 @@ end
 </ruby>
 
 Again, this is not an ideal example for this filter, because it's not run in the scope of the controller but gets the controller passed as an argument. The filter class has a class method +filter+ which gets run before or after the action, depending on if it's a before or after filter. Classes used as around filters can also use the same +filter+ method, which will get run in the same way. The method must +yield+ to execute the action. Alternatively, it can have both a +before+ and an +after+ method that are run before and after the action.
-
-h3. Verification
-
-Verifications make sure certain criteria are met in order for a controller or action to run. They can specify that a certain key (or several keys in the form of an array) is present in the +params+, +session+ or +flash+ hashes or that a certain HTTP method was used or that the request was made using +XMLHttpRequest+ (Ajax). The default action taken when these criteria are not met is to render a 400 Bad Request response, but you can customize this by specifying a redirect URL or rendering something else and you can also add flash messages and HTTP headers to the response. It is described in the "API documentation":http://ap.rubyonrails.org/classes/ActionController/Verification/ClassMethods.html as "essentially a special kind of before_filter".
-
-Here's an example of using verification to make sure the user supplies a username and a password in order to log in:
-
-<ruby>
-class LoginsController < ApplicationController
-  verify :params => [:username, :password],
-         :render => {:action => "new"},
-         :add_flash => {
-           :error => "Username and password required to log in"
-         }
-
-  def create
-    @user = User.authenticate(params[:username], params[:password])
-    if @user
-      flash[:notice] = "You're logged in"
-      redirect_to root_url
-    else
-      render :action => "new"
-    end
-  end
-end
-</ruby>
-
-Now the +create+ action won't run unless the "username" and "password" parameters are present, and if they're not, an error message will be added to the flash and the +new+ action will be rendered. But there's something rather important missing from the verification above: It will be used for *every* action in LoginsController, which is not what we want. You can limit which actions it will be used for with the +:only+ and +:except+ options just like a filter:
-
-<ruby>
-class LoginsController < ApplicationController
-  verify :params => [:username, :password],
-         :render => {:action => "new"},
-         :add_flash => {
-           :error => "Username and password required to log in"
-         },
-         :only => :create # Run only for the "create" action
-end
-</ruby>
 
 h3. Request Forgery Protection
 
@@ -558,7 +554,7 @@ In every controller there are two accessor methods pointing to the request and t
 
 h4. The +request+ Object
 
-The request object contains a lot of useful information about the request coming in from the client. To get a full list of the available methods, refer to the "API documentation":http://ap.rubyonrails.org/classes/ActionController/AbstractRequest.html. Among the properties that you can access on this object are:
+The request object contains a lot of useful information about the request coming in from the client. To get a full list of the available methods, refer to the "API documentation":http://api.rubyonrails.org/classes/ActionDispatch/Request.html. Among the properties that you can access on this object are:
 
 |_.Property of +request+|_.Purpose|
 |host|The hostname used for this request.|
@@ -606,26 +602,15 @@ Rails comes with two built-in HTTP authentication mechanisms:
 
 h4. HTTP Basic Authentication
 
-HTTP basic authentication is an authentication scheme that is supported by the majority of browsers and other HTTP clients. As an example, consider an administration section which will only be available by entering a username and a password into the browser's HTTP basic dialog window. Using the built-in authentication is quite easy and only requires you to use one method, +authenticate_or_request_with_http_basic+.
+HTTP basic authentication is an authentication scheme that is supported by the majority of browsers and other HTTP clients. As an example, consider an administration section which will only be available by entering a username and a password into the browser's HTTP basic dialog window. Using the built-in authentication is quite easy and only requires you to use one method, +http_basic_authenticate_with+.
 
 <ruby>
 class AdminController < ApplicationController
-  USERNAME, PASSWORD = "humbaba", "5baa61e4"
-
-  before_filter :authenticate
-
-  private
-
-  def authenticate
-    authenticate_or_request_with_http_basic do |username, password|
-      username == USERNAME &&
-      Digest::SHA1.hexdigest(password) == PASSWORD
-    end
-  end
+  http_basic_authenticate_with :name => "humbaba", :password => "5baa61e4"
 end
 </ruby>
 
-With this in place, you can create namespaced controllers that inherit from +AdminController+. The before filter will thus be run for all actions in those controllers, protecting them with HTTP basic authentication.
+With this in place, you can create namespaced controllers that inherit from +AdminController+. The filter will thus be run for all actions in those controllers, protecting them with HTTP basic authentication.
 
 h4. HTTP Digest Authentication
 
@@ -806,6 +791,28 @@ end
 </ruby>
 
 NOTE: Certain exceptions are only rescuable from the +ApplicationController+ class, as they are raised before the controller gets initialized and the action gets executed. See Pratik Naik's "article":http://m.onkey.org/2008/7/20/rescue-from-dispatching on the subject for more information.
+
+h3. Force HTTPS protocol
+
+Sometime you might want to force a particular controller to only be accessible via an HTTPS protocol for security reason. Since Rails 3.1 you can now use +force_ssl+ method in your controller to enforce that:
+
+<ruby>
+class DinnerController
+  force_ssl
+end
+</ruby>
+
+Just like the filter, you could also passing +:only+ and +:except+ to enforce the secure connection only to specific actions
+
+<ruby>
+class DinnerController
+  force_ssl :only => :cheeseburger
+  # or
+  force_ssl :except => :cheeseburger
+end
+</ruby>
+
+Please note that if you found yourself adding +force_ssl+ to many controllers, you may found yourself wanting to force the whole application to use HTTPS instead. In that case, you can set the +config.force_ssl+ in your environment file.
 
 h3. Changelog
 

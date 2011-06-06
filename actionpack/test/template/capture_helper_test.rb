@@ -4,7 +4,7 @@ class CaptureHelperTest < ActionView::TestCase
   def setup
     super
     @av = ActionView::Base.new
-    @_content_for = Hash.new {|h,k| h[k] = "" }
+    @view_flow = ActionView::OutputFlow.new
   end
 
   def test_capture_captures_the_temporary_output_buffer_in_its_block
@@ -38,11 +38,33 @@ class CaptureHelperTest < ActionView::TestCase
     assert_equal '&lt;em&gt;bar&lt;/em&gt;', string
   end
 
-  def test_content_for
+  def test_capture_used_for_read
+    content_for :foo, "foo"
+    assert_equal "foo", content_for(:foo)
+
+    content_for(:bar){ "bar" }
+    assert_equal "bar", content_for(:bar)
+  end
+
+  def test_content_for_question_mark
     assert ! content_for?(:title)
     content_for :title, 'title'
     assert content_for?(:title)
     assert ! content_for?(:something_else)
+  end
+
+  def test_provide
+    assert !content_for?(:title)
+    provide :title, "hi"
+    assert content_for?(:title)
+    assert_equal "hi", content_for(:title)
+    provide :title, "<p>title</p>"
+    assert_equal "hi&lt;p&gt;title&lt;/p&gt;", content_for(:title)
+
+    @view_flow = ActionView::OutputFlow.new
+    provide :title, "hi"
+    provide :title, "<p>title</p>".html_safe
+    assert_equal "hi<p>title</p>", content_for(:title)
   end
 
   def test_with_output_buffer_swaps_the_output_buffer_given_no_argument

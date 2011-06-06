@@ -23,6 +23,9 @@ module ActiveRecord
       return unless logger.debug?
 
       payload = event.payload
+
+      return if 'SCHEMA' == payload[:name]
+
       name    = '%s (%.1fms)' % [payload[:name], event.duration]
       sql     = payload[:sql].squeeze(' ')
       binds   = nil
@@ -41,6 +44,15 @@ module ActiveRecord
       end
 
       debug "  #{name}  #{sql}#{binds}"
+    end
+
+    def identity(event)
+      return unless logger.debug?
+
+      name = color(event.payload[:name], odd? ? CYAN : MAGENTA, true)
+      line = odd? ? color(event.payload[:line], nil, true) : event.payload[:line]
+
+      debug "  #{name}  #{line}"
     end
 
     def odd?

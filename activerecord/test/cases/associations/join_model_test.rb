@@ -1,7 +1,9 @@
 require "cases/helper"
+require 'active_support/core_ext/object/inclusion'
 require 'models/tag'
 require 'models/tagging'
 require 'models/post'
+require 'models/rating'
 require 'models/item'
 require 'models/comment'
 require 'models/author'
@@ -11,6 +13,9 @@ require 'models/vertex'
 require 'models/edge'
 require 'models/book'
 require 'models/citation'
+require 'models/aircraft'
+require 'models/engine'
+require 'models/car'
 
 class AssociationsJoinModelTest < ActiveRecord::TestCase
   self.use_transactional_fixtures = false unless supports_savepoints?
@@ -160,7 +165,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
 
   def test_delete_polymorphic_has_many_with_delete_all
     assert_equal 1, posts(:welcome).taggings.count
-    posts(:welcome).taggings.first.update_attribute :taggable_type, 'PostWithHasManyDeleteAll'
+    posts(:welcome).taggings.first.update_column :taggable_type, 'PostWithHasManyDeleteAll'
     post = find_post_with_dependency(1, :has_many, :taggings, :delete_all)
 
     old_count = Tagging.count
@@ -171,7 +176,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
 
   def test_delete_polymorphic_has_many_with_destroy
     assert_equal 1, posts(:welcome).taggings.count
-    posts(:welcome).taggings.first.update_attribute :taggable_type, 'PostWithHasManyDestroy'
+    posts(:welcome).taggings.first.update_column :taggable_type, 'PostWithHasManyDestroy'
     post = find_post_with_dependency(1, :has_many, :taggings, :destroy)
 
     old_count = Tagging.count
@@ -182,7 +187,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
 
   def test_delete_polymorphic_has_many_with_nullify
     assert_equal 1, posts(:welcome).taggings.count
-    posts(:welcome).taggings.first.update_attribute :taggable_type, 'PostWithHasManyNullify'
+    posts(:welcome).taggings.first.update_column :taggable_type, 'PostWithHasManyNullify'
     post = find_post_with_dependency(1, :has_many, :taggings, :nullify)
 
     old_count = Tagging.count
@@ -193,7 +198,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
 
   def test_delete_polymorphic_has_one_with_destroy
     assert posts(:welcome).tagging
-    posts(:welcome).tagging.update_attribute :taggable_type, 'PostWithHasOneDestroy'
+    posts(:welcome).tagging.update_column :taggable_type, 'PostWithHasOneDestroy'
     post = find_post_with_dependency(1, :has_one, :tagging, :destroy)
 
     old_count = Tagging.count
@@ -204,7 +209,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
 
   def test_delete_polymorphic_has_one_with_nullify
     assert posts(:welcome).tagging
-    posts(:welcome).tagging.update_attribute :taggable_type, 'PostWithHasOneNullify'
+    posts(:welcome).tagging.update_column :taggable_type, 'PostWithHasOneNullify'
     post = find_post_with_dependency(1, :has_one, :tagging, :nullify)
 
     old_count = Tagging.count
@@ -214,7 +219,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
   end
 
   def test_has_many_with_piggyback
-    assert_equal "2", categories(:sti_test).authors.first.post_id.to_s
+    assert_equal "2", categories(:sti_test).authors_with_select.first.post_id.to_s
   end
 
   def test_include_has_many_through
@@ -288,7 +293,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
   end
 
   def test_has_many_going_through_join_model_with_custom_foreign_key
-    assert_equal [], posts(:thinking).authors
+    assert_equal [authors(:bob)], posts(:thinking).authors
     assert_equal [authors(:mary)], posts(:authorless).authors
   end
 
@@ -305,7 +310,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
   end
 
   def test_has_many_through_with_custom_primary_key_on_has_many_source
-    assert_equal [authors(:david)], posts(:thinking).authors_using_custom_pk
+    assert_equal [authors(:david), authors(:bob)], posts(:thinking).authors_using_custom_pk.order('authors.id')
   end
 
   def test_both_scoped_and_explicit_joins_should_be_respected
@@ -399,14 +404,6 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
     end
   end
 
-  def test_has_many_through_has_many_through
-    assert_raise(ActiveRecord::HasManyThroughSourceAssociationMacroError) { authors(:david).tags }
-  end
-
-  def test_has_many_through_habtm
-    assert_raise(ActiveRecord::HasManyThroughSourceAssociationMacroError) { authors(:david).post_categories }
-  end
-
   def test_eager_load_has_many_through_has_many
     author = Author.find :first, :conditions => ['name = ?', 'David'], :include => :comments, :order => 'comments.id'
     SpecialComment.new; VerySpecialComment.new
@@ -460,7 +457,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
     assert saved_post.tags.include?(new_tag)
 
     assert new_tag.persisted?
-    assert saved_post.reload.tags(true).include?(new_tag)
+    assert new_tag.in?(saved_post.reload.tags(true))
 
 
     new_post = Post.new(:title => "Association replacmenet works!", :body => "You best believe it.")
@@ -473,7 +470,7 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
 
     new_post.save!
     assert new_post.persisted?
-    assert new_post.reload.tags(true).include?(saved_tag)
+    assert saved_tag.in?(new_post.reload.tags(true))
 
     assert !posts(:thinking).tags.build.persisted?
     assert !posts(:thinking).tags.new.persisted?
@@ -522,10 +519,10 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
   end
 
   def test_has_many_through_collection_size_uses_counter_cache_if_it_exists
-    author = authors(:david)
-    author.stubs(:_read_attribute).with('comments_count').returns(100)
-    assert_equal 100, author.comments.size
-    assert !author.comments.loaded?
+    c = categories(:general)
+    c.categorizations_count = 100
+    assert_equal 100, c.categorizations.size
+    assert !c.categorizations.loaded?
   end
 
   def test_adding_junk_to_has_many_through_should_raise_type_mismatch
@@ -710,11 +707,17 @@ class AssociationsJoinModelTest < ActiveRecord::TestCase
     assert_equal [9, 10, new_comment.id], authors(:david).sti_post_comments.map(&:id).sort
   end
 
+  def test_has_many_with_pluralize_table_names_false
+    engine = Engine.create!(:car_id => 1)
+    aircraft = Aircraft.create!(:name => "Airbus 380", :id => 1)
+    assert_equal aircraft.engines, [engine]
+  end
+
   private
     # create dynamic Post models to allow different dependency options
     def find_post_with_dependency(post_id, association, association_name, dependency)
       class_name = "PostWith#{association.to_s.classify}#{dependency.to_s.classify}"
-      Post.find(post_id).update_attribute :type, class_name
+      Post.find(post_id).update_column :type, class_name
       klass = Object.const_set(class_name, Class.new(ActiveRecord::Base))
       klass.set_table_name 'posts'
       klass.send(association, association_name, :as => :taggable, :dependent => dependency)

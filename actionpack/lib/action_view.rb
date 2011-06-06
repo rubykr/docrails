@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2010 David Heinemeier Hansson
+# Copyright (c) 2004-2011 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -34,23 +34,34 @@ module ActionView
     autoload :Context
     autoload :Helpers
     autoload :LookupContext
-    autoload :Partials
     autoload :PathSet
-    autoload :Rendering
     autoload :Template
     autoload :TestCase
 
     autoload_under "renderer" do
+      autoload :Renderer
       autoload :AbstractRenderer
       autoload :PartialRenderer
       autoload :TemplateRenderer
+      autoload :StreamingTemplateRenderer
     end
 
     autoload_at "action_view/template/resolver" do
       autoload :Resolver
       autoload :PathResolver
       autoload :FileSystemResolver
+      autoload :OptimizedFileSystemResolver
       autoload :FallbackFileSystemResolver
+    end
+
+    autoload_at "action_view/buffers" do
+      autoload :OutputBuffer
+      autoload :StreamingBuffer
+    end
+
+    autoload_at "action_view/flows" do
+      autoload :OutputFlow
+      autoload :StreamingFlow
     end
 
     autoload_at "action_view/template/error" do

@@ -1,7 +1,5 @@
 require 'active_support/duration'
-require 'active_support/core_ext/date/acts_like'
-require 'active_support/core_ext/date/calculations'
-require 'active_support/core_ext/date_time/conversions'
+require 'active_support/core_ext/time/zones'
 
 class Time
   COMMON_YEAR_DAYS_IN_MONTH = [nil, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
@@ -41,9 +39,9 @@ class Time
       time_with_datetime_fallback(:local, *args)
     end
 
-    # Returns <tt>Time.zone.now</tt> when <tt>config.time_zone</tt> is set, otherwise just returns <tt>Time.now</tt>.
+    # Returns <tt>Time.zone.now</tt> when <tt>Time.zone</tt> or <tt>config.time_zone</tt> are set, otherwise just returns <tt>Time.now</tt>.
     def current
-      ::Time.zone_default ? ::Time.zone.now : ::Time.now
+      ::Time.zone ? ::Time.zone.now : ::Time.now
     end
   end
 
@@ -190,7 +188,7 @@ class Time
   # Returns a new Time representing the start of the day (0:00)
   def beginning_of_day
     #(self - seconds_since_midnight).change(:usec => 0)
-    change(:hour => 0, :min => 0, :sec => 0, :usec => 0)
+    change(:hour => 0)
   end
   alias :midnight :beginning_of_day
   alias :at_midnight :beginning_of_day
@@ -204,7 +202,7 @@ class Time
   # Returns a new Time representing the start of the month (1st of the month, 0:00)
   def beginning_of_month
     #self - ((self.mday-1).days + self.seconds_since_midnight)
-    change(:day => 1,:hour => 0, :min => 0, :sec => 0, :usec => 0)
+    change(:day => 1, :hour => 0)
   end
   alias :at_beginning_of_month :beginning_of_month
 
@@ -230,7 +228,7 @@ class Time
 
   # Returns  a new Time representing the start of the year (1st of january, 0:00)
   def beginning_of_year
-    change(:month => 1, :day => 1, :hour => 0, :min => 0, :sec => 0, :usec => 0)
+    change(:month => 1, :day => 1, :hour => 0)
   end
   alias :at_beginning_of_year :beginning_of_year
 
@@ -283,14 +281,8 @@ class Time
   # Layers additional behavior on Time#<=> so that DateTime and ActiveSupport::TimeWithZone instances
   # can be chronologically compared with a Time
   def compare_with_coercion(other)
-    # if other is an ActiveSupport::TimeWithZone, coerce a Time instance from it so we can do <=> comparison
-    other = other.comparable_time if other.respond_to?(:comparable_time)
-    if other.acts_like?(:date)
-      # other is a Date/DateTime, so coerce self #to_datetime and hand off to DateTime#<=>
-      to_datetime.compare_without_coercion(other)
-    else
-      compare_without_coercion(other)
-    end
+    # we're avoiding Time#to_datetime cause it's expensive
+    other.is_a?(Time) ? compare_without_coercion(other.to_time) : to_datetime <=> other
   end
   alias_method :compare_without_coercion, :<=>
   alias_method :<=>, :compare_with_coercion

@@ -4,7 +4,7 @@ module ActiveRecord
   # = Active Record Autosave Association
   #
   # +AutosaveAssociation+ is a module that takes care of automatically saving
-  # associacted records when their parent is saved. In addition to saving, it
+  # associated records when their parent is saved. In addition to saving, it
   # also destroys any associated records that were marked for destruction.
   # (See +mark_for_destruction+ and <tt>marked_for_destruction?</tt>).
   #
@@ -161,7 +161,7 @@ module ActiveRecord
       #
       # For performance reasons, we don't check whether to validate at runtime.
       # However the validation and callback methods are lazy and those methods
-      # get created when they are invoked for the very first time.  However,
+      # get created when they are invoked for the very first time. However,
       # this can change, for instance, when using nested attributes, which is
       # called _after_ the association has been defined. Since we don't want
       # the callbacks to get defined multiple times, there are guards that

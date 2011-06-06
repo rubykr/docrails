@@ -1,4 +1,25 @@
+*Rails 3.2.0 (unreleased)*
+
+* Removed ActiveSupport::SecureRandom in favour of SecureRandom from the standard library [Jon Leighton]
+
 *Rails 3.1.0 (unreleased)*
+
+* Deprecated ActiveSupport::SecureRandom in favour of SecureRandom from the standard library [Jon Leighton]
+
+* New reporting method Kernel#quietly. [fxn]
+
+* Add String#inquiry as a convenience method for turning a string into a StringInquirer object [DHH]
+
+* Add Object#in? to test if an object is included in another object [Prem Sichanugrist, Brian Morearty, John Reitano]
+
+* LocalCache strategy is now a real middleware class, not an anonymous class
+posing for pictures.
+
+* ActiveSupport::Dependencies::ClassCache class has been introduced for
+holding references to reloadable classes.
+
+* ActiveSupport::Dependencies::Reference has been refactored to take direct
+advantage of the new ClassCache.
 
 * Backports Range#cover? as an alias for Range#include? in Ruby 1.8 [Diego Carrion, fxn]
 
@@ -6,13 +27,43 @@
 
 * Added before_remove_const callback to ActiveSupport::Dependencies.remove_unloadable_constants! [Andrew White]
 
-*Rails 3.0.2 (unreleased)*
+* JSON decoding now uses the multi_json gem which also vendors a json engine called OkJson. The yaml backend has been removed in favor of OkJson as a default engine for 1.8.x, while the built in 1.9.x json implementation will be used by default. [Josh Kalderimis]
+
+
+*Rails 3.0.7 (April 18, 2011)*
+
+* Hash.from_xml no longer loses attributes on tags containing only whitespace [André Arko]
+
+
+*Rails 3.0.6 (April 5, 2011)
+
+* No changes.
+
+
+*Rails 3.0.5 (February 26, 2011)*
+
+* No changes.
+
+
+*Rails 3.0.4 (February 8, 2011)*
+
+* No changes.
+
+
+*Rails 3.0.3 (November 16, 2010)*
+
+* No changes.
+
+
+*Rails 3.0.2 (November 15, 2010)*
 
 * Added before_remove_const callback to ActiveSupport::Dependencies.remove_unloadable_constants! [Andrew White]
+
 
 *Rails 3.0.1 (October 15, 2010)*
 
 * No Changes, just a version bump.
+
 
 *Rails 3.0.0 (August 29, 2010)*
 

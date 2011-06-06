@@ -13,7 +13,9 @@ module ActionController
     autoload :Compatibility
     autoload :ConditionalGet
     autoload :Cookies
+    autoload :DataStreaming
     autoload :Flash
+    autoload :ForceSSL
     autoload :Head
     autoload :Helpers
     autoload :HideActions
@@ -21,6 +23,7 @@ module ActionController
     autoload :ImplicitRender
     autoload :Instrumentation
     autoload :MimeResponds
+    autoload :ParamsWrapper
     autoload :RackDelegation
     autoload :Redirecting
     autoload :Renderers
@@ -34,12 +37,13 @@ module ActionController
     autoload :UrlFor
   end
 
-  autoload :Integration,     'action_controller/deprecated/integration_test'
-  autoload :IntegrationTest, 'action_controller/deprecated/integration_test'
-  autoload :PerformanceTest, 'action_controller/deprecated/performance_test'
-  autoload :UrlWriter,       'action_controller/deprecated'
-  autoload :Routing,         'action_controller/deprecated'
-  autoload :TestCase,        'action_controller/test_case'
+  autoload :Integration,        'action_controller/deprecated/integration_test'
+  autoload :IntegrationTest,    'action_controller/deprecated/integration_test'
+  autoload :PerformanceTest,    'action_controller/deprecated/performance_test'
+  autoload :UrlWriter,          'action_controller/deprecated'
+  autoload :Routing,            'action_controller/deprecated'
+  autoload :TestCase,           'action_controller/test_case'
+  autoload :TemplateAssertions, 'action_controller/test_case'
 
   eager_autoload do
     autoload :RecordIdentifier

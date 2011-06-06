@@ -9,11 +9,20 @@ module Rails
       @options   = generator.options
     end
 
-  private
+    private
+      %w(template copy_file directory empty_directory inside
+         empty_directory_with_gitkeep create_file chmod shebang).each do |method|
+        class_eval <<-RUBY, __FILE__, __LINE__ + 1
+          def #{method}(*args, &block)
+            @generator.send(:#{method}, *args, &block)
+          end
+        RUBY
+      end
 
-    def method_missing(meth, *args, &block)
-      @generator.send(meth, *args, &block)
-    end
+      # TODO: Remove once this is fully in place
+      def method_missing(meth, *args, &block)
+        @generator.send(meth, *args, &block)
+      end
   end
 
   # The application builder allows you to override elements of the application
@@ -21,7 +30,7 @@ module Rails
   # generator.
   #
   # This allows you to override entire operations, like the creation of the
-  # Gemfile, README, or javascript files, without needing to know exactly
+  # Gemfile, README, or JavaScript files, without needing to know exactly
   # what those operations do so you can create another template action.
   class AppBuilder
     def rakefile
@@ -46,6 +55,8 @@ module Rails
 
     def app
       directory 'app'
+      git_keep  'app/mailers'
+      git_keep  'app/models'
     end
 
     def config
@@ -80,43 +91,11 @@ module Rails
     end
 
     def log
-      empty_directory "log"
-
-      inside "log" do
-        %w( server production development test ).each do |file|
-          create_file "#{file}.log"
-          chmod "#{file}.log", 0666, :verbose => false
-        end
-      end
+      empty_directory_with_gitkeep "log"
     end
 
     def public_directory
       directory "public", "public", :recursive => false
-    end
-
-    def images
-      directory "public/images"
-    end
-
-    def stylesheets
-      empty_directory_with_gitkeep "public/stylesheets"
-    end
-
-    def javascripts
-      empty_directory "public/javascripts"
-
-      unless options[:skip_javascript]
-        copy_file "public/javascripts/#{options[:javascript]}.js"
-        copy_file "public/javascripts/#{options[:javascript]}_ujs.js", "public/javascripts/rails.js"
-
-        if options[:javascript] == "prototype"
-          copy_file "public/javascripts/controls.js"
-          copy_file "public/javascripts/dragdrop.js"
-          copy_file "public/javascripts/effects.js"
-        end
-      end
-
-      copy_file "public/javascripts/application.js"
     end
 
     def script
@@ -127,17 +106,26 @@ module Rails
     end
 
     def test
-      directory "test"
+      empty_directory_with_gitkeep "test/fixtures"
+      empty_directory_with_gitkeep "test/functional"
+      empty_directory_with_gitkeep "test/integration"
+      empty_directory_with_gitkeep "test/unit"
+
+      template "test/performance/browsing_test.rb"
+      template "test/test_helper.rb"
     end
 
     def tmp
-      empty_directory "tmp"
+      empty_directory_with_gitkeep "tmp/cache"
+    end
 
-      inside "tmp" do
-        %w(sessions sockets cache pids).each do |dir|
-          empty_directory(dir)
-        end
-      end
+    def vendor
+      vendor_stylesheets
+      vendor_plugins
+    end
+
+    def vendor_stylesheets
+      empty_directory_with_gitkeep "vendor/assets/stylesheets"
     end
 
     def vendor_plugins
@@ -150,15 +138,14 @@ module Rails
     # can change in Ruby 1.8.7 when we FileUtils.cd.
     RAILS_DEV_PATH = File.expand_path("../../../../../..", File.dirname(__FILE__))
 
-    RESERVED_NAMES = %w[application destroy benchmarker profiler
-                        plugin runner test]
+    RESERVED_NAMES = %w[application destroy benchmarker profiler plugin runner test]
 
     class AppGenerator < AppBase
       add_shared_options_for "application"
 
       # Add bin/rails options
-      class_option :version,            :type => :boolean, :aliases => "-v", :group => :rails,
-                                        :desc => "Show Rails version number and quit"
+      class_option :version, :type => :boolean, :aliases => "-v", :group => :rails,
+                             :desc => "Show Rails version number and quit"
 
       def initialize(*args)
         raise Error, "Options should be given after the application name. For details run: rails --help" if args[0].blank?
@@ -167,10 +154,6 @@ module Rails
 
         if !options[:skip_active_record] && !DATABASES.include?(options[:database])
           raise Error, "Invalid value for --database option. Supported for preconfiguration are: #{DATABASES.join(", ")}."
-        end
-        
-        if !options[:skip_javascript] && !JAVASCRIPTS.include?(options[:javascript])
-          raise Error, "Invalid value for --javascript option. Supported for preconfiguration are: #{JAVASCRIPTS.join(", ")}."
         end
       end
 
@@ -221,18 +204,6 @@ module Rails
         build(:public_directory)
       end
 
-      def create_public_image_files
-        build(:images)
-      end
-
-      def create_public_stylesheets_files
-        build(:stylesheets)
-      end
-
-      def create_javascript_files
-        build(:javascripts)
-      end
-
       def create_script_files
         build(:script)
       end
@@ -246,14 +217,14 @@ module Rails
       end
 
       def create_vendor_files
-        build(:vendor_plugins)
+        build(:vendor)
       end
 
       def finish_template
         build(:leftovers)
       end
 
-      public_task :apply_rails_template, :bundle_if_dev_or_edge
+      public_task :apply_rails_template, :run_bundle
 
     protected
 
@@ -301,7 +272,7 @@ module Rails
       end
 
       def app_secret
-        ActiveSupport::SecureRandom.hex(64)
+        SecureRandom.hex(64)
       end
 
       def mysql_socket

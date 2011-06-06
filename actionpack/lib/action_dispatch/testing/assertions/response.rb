@@ -1,15 +1,10 @@
+require 'active_support/core_ext/object/inclusion'
+
 module ActionDispatch
   module Assertions
     # A small suite of assertions that test responses from \Rails applications.
     module ResponseAssertions
       extend ActiveSupport::Concern
-
-      included do
-        # TODO: Need to pull in AV::Template monkey patches that track which
-        # templates are rendered. assert_template should probably be part
-        # of AV instead of AD.
-        require 'action_view/test_case'
-      end
 
       # Asserts that the response is one of the following types:
       #
@@ -33,14 +28,14 @@ module ActionDispatch
       def assert_response(type, message = nil)
         validate_request!
 
-        if [ :success, :missing, :redirect, :error ].include?(type) && @response.send("#{type}?")
+        if type.in?([:success, :missing, :redirect, :error]) && @response.send("#{type}?")
           assert_block("") { true } # to count the assertion
         elsif type.is_a?(Fixnum) && @response.response_code == type
           assert_block("") { true } # to count the assertion
         elsif type.is_a?(Symbol) && @response.response_code == Rack::Utils::SYMBOL_TO_STATUS_CODE[type]
           assert_block("") { true } # to count the assertion
         else
-          assert_block(build_message(message, "Expected response to be a <?>, but was <?>", type, @response.response_code)) { false }
+          flunk(build_message(message, "Expected response to be a <?>, but was <?>", type, @response.response_code))
         end
       end
 

@@ -1,13 +1,17 @@
 require 'active_support/core_ext/hash/keys'
 
 # This class has dubious semantics and we only have it so that
-# people can write params[:key] instead of params['key']
+# people can write <tt>params[:key]</tt> instead of <tt>params['key']</tt>
 # and they get the same value for both keys.
 
 module ActiveSupport
   class HashWithIndifferentAccess < Hash
     def extractable_options?
       true
+    end
+
+    def with_indifferent_access
+      dup
     end
 
     def initialize(constructor = {})
@@ -58,8 +62,12 @@ module ActiveSupport
     #   hash_1.update(hash_2) # => {"key"=>"New Value!"}
     #
     def update(other_hash)
-      other_hash.each_pair { |key, value| regular_writer(convert_key(key), convert_value(value)) }
-      self
+      if other_hash.is_a? HashWithIndifferentAccess
+        super(other_hash)
+      else
+        other_hash.each_pair { |key, value| regular_writer(convert_key(key), convert_value(value)) }
+        self
+      end
     end
 
     alias_method :merge!, :update
@@ -109,7 +117,7 @@ module ActiveSupport
     end
 
     # Performs the opposite of merge, with the keys and values from the first hash taking precedence over the second.
-    # This overloaded definition prevents returning a regular hash, if reverse_merge is called on a HashWithDifferentAccess.
+    # This overloaded definition prevents returning a regular hash, if reverse_merge is called on a <tt>HashWithDifferentAccess</tt>.
     def reverse_merge(other_hash)
       super self.class.new_from_hash_copying_default(other_hash)
     end
@@ -140,8 +148,8 @@ module ActiveSupport
       end
 
       def convert_value(value)
-        if value.class == Hash
-          self.class.new_from_hash_copying_default(value)
+        if value.is_a? Hash
+          value.nested_under_indifferent_access
         elsif value.is_a?(Array)
           value.dup.replace(value.map { |e| convert_value(e) })
         else

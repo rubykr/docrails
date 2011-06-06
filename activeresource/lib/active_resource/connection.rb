@@ -1,5 +1,6 @@
 require 'active_support/core_ext/benchmark'
 require 'active_support/core_ext/uri'
+require 'active_support/core_ext/object/inclusion'
 require 'net/https'
 require 'date'
 require 'time'
@@ -29,7 +30,7 @@ module ActiveResource
 
     # The +site+ parameter is required and will set the +site+
     # attribute to the URI for the remote resource service.
-    def initialize(site, format = ActiveResource::Formats::XmlFormat)
+    def initialize(site, format = ActiveResource::Formats::JsonFormat)
       raise ArgumentError, 'Missing site URI' unless site
       @user = @password = nil
       self.site = site
@@ -277,7 +278,7 @@ module ActiveResource
       def legitimize_auth_type(auth_type)
         return :basic if auth_type.nil?
         auth_type = auth_type.to_sym
-        [:basic, :digest].include?(auth_type) ? auth_type : :basic
+        auth_type.in?([:basic, :digest]) ? auth_type : :basic
       end
   end
 end

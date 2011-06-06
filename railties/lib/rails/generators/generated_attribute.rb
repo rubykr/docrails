@@ -1,4 +1,5 @@
 require 'active_support/time'
+require 'active_support/core_ext/object/inclusion'
 
 module Rails
   module Generators
@@ -12,12 +13,13 @@ module Rails
 
       def field_type
         @field_type ||= case type
-          when :integer, :float, :decimal then :text_field
-          when :time                      then :time_select
-          when :datetime, :timestamp      then :datetime_select
-          when :date                      then :date_select
-          when :text                      then :text_area
-          when :boolean                   then :check_box
+          when :integer              then :number_field
+          when :float, :decimal      then :text_field
+          when :time                 then :time_select
+          when :datetime, :timestamp then :datetime_select
+          when :date                 then :date_select
+          when :text                 then :text_area
+          when :boolean              then :check_box
           else
             :text_field
         end
@@ -44,7 +46,7 @@ module Rails
       end
 
       def reference?
-        [ :references, :belongs_to ].include?(self.type)
+        self.type.in?([:references, :belongs_to])
       end
     end
   end

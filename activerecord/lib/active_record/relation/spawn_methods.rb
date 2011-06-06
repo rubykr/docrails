@@ -8,6 +8,8 @@ module ActiveRecord
 
       merged_relation = clone
 
+      r = r.with_default_scope if r.default_scoped? && r.klass != klass
+
       Relation::ASSOCIATION_METHODS.each do |method|
         value = r.send(:"#{method}_values")
 
@@ -70,6 +72,7 @@ module ActiveRecord
     #
     def except(*skips)
       result = self.class.new(@klass, table)
+      result.default_scoped = default_scoped
 
       ((Relation::ASSOCIATION_METHODS + Relation::MULTI_VALUE_METHODS) - skips).each do |method|
         result.send(:"#{method}_values=", send(:"#{method}_values"))
@@ -78,6 +81,9 @@ module ActiveRecord
       (Relation::SINGLE_VALUE_METHODS - skips).each do |method|
         result.send(:"#{method}_value=", send(:"#{method}_value"))
       end
+
+      # Apply scope extension modules
+      result.send(:apply_modules, extensions)
 
       result
     end
@@ -91,6 +97,7 @@ module ActiveRecord
     #
     def only(*onlies)
       result = self.class.new(@klass, table)
+      result.default_scoped = default_scoped
 
       ((Relation::ASSOCIATION_METHODS + Relation::MULTI_VALUE_METHODS) & onlies).each do |method|
         result.send(:"#{method}_values=", send(:"#{method}_values"))
@@ -99,6 +106,9 @@ module ActiveRecord
       (Relation::SINGLE_VALUE_METHODS & onlies).each do |method|
         result.send(:"#{method}_value=", send(:"#{method}_value"))
       end
+
+      # Apply scope extension modules
+      result.send(:apply_modules, extensions)
 
       result
     end

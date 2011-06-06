@@ -57,7 +57,7 @@ module ActionView
     # +asset_host+ to a proc like this:
     #
     #   ActionController::Base.asset_host = Proc.new { |source|
-    #     "http://assets#{source.hash % 2 + 1}.example.com"
+    #     "http://assets#{Digest::MD5.hexdigest(source).to_i(16) % 2 + 1}.example.com"
     #   }
     #   image_tag("rails.png")
     #   # => <img alt="Rails" src="http://assets1.example.com/images/rails.png?1230601161" />
@@ -268,7 +268,7 @@ module ActionView
       #   image_path("edit.png")                                     # => "/images/edit.png"
       #   image_path("icons/edit.png")                               # => "/images/icons/edit.png"
       #   image_path("/icons/edit.png")                              # => "/icons/edit.png"
-      #   image_path("http://www.railsapplication.com/img/edit.png") # => "http://www.railsapplication.com/img/edit.png"
+      #   image_path("http://www.example.com/img/edit.png")          # => "http://www.example.com/img/edit.png"
       #
       # If you have images as application resources this method may conflict with their named routes.
       # The alias +path_to_image+ is provided to avoid that. Rails uses the alias internally, and
@@ -287,7 +287,7 @@ module ActionView
       #   video_path("hd.avi")                                        # => /videos/hd.avi
       #   video_path("trailers/hd.avi")                               # => /videos/trailers/hd.avi
       #   video_path("/trailers/hd.avi")                              # => /trailers/hd.avi
-      #   video_path("http://www.railsapplication.com/vid/hd.avi") # => http://www.railsapplication.com/vid/hd.avi
+      #   video_path("http://www.example.com/vid/hd.avi")             # => http://www.example.com/vid/hd.avi
       def video_path(source)
         asset_paths.compute_public_path(source, 'videos')
       end
@@ -302,7 +302,7 @@ module ActionView
       #   audio_path("horse.wav")                                        # => /audios/horse.wav
       #   audio_path("sounds/horse.wav")                                 # => /audios/sounds/horse.wav
       #   audio_path("/sounds/horse.wav")                                # => /sounds/horse.wav
-      #   audio_path("http://www.railsapplication.com/sounds/horse.wav") # => http://www.railsapplication.com/sounds/horse.wav
+      #   audio_path("http://www.example.com/sounds/horse.wav")          # => http://www.example.com/sounds/horse.wav
       def audio_path(source)
         asset_paths.compute_public_path(source, 'audios')
       end
@@ -434,7 +434,7 @@ module ActionView
       private
 
         def asset_paths
-          @asset_paths ||= AssetPaths.new(config, controller)
+          @asset_paths ||= AssetTagHelper::AssetPaths.new(config, controller)
         end
     end
   end

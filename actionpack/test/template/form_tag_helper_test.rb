@@ -1,4 +1,5 @@
 require 'abstract_unit'
+require 'active_support/core_ext/object/inclusion'
 
 class FormTagHelperTest < ActionView::TestCase
   tests ActionView::Helpers::FormTagHelper
@@ -13,7 +14,7 @@ class FormTagHelperTest < ActionView::TestCase
 
     txt =  %{<div style="margin:0;padding:0;display:inline">}
     txt << %{<input name="utf8" type="hidden" value="&#x2713;" />}
-    if (method && !['get','post'].include?(method.to_s))
+    if method && !method.to_s.in?(['get','post'])
       txt << %{<input name="_method" type="hidden" value="#{method}" />}
     end
     txt << %{</div>}
@@ -199,9 +200,15 @@ class FormTagHelperTest < ActionView::TestCase
     assert_dom_equal expected, actual
   end
 
-  def test_select_tag_with_include_blank_with_string
-    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :include_blank => "string"
+  def test_select_tag_with_prompt
+    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :prompt => "string"
     expected = %(<select id="places" name="places"><option value="">string</option><option>Home</option><option>Work</option><option>Pub</option></select>)
+    assert_dom_equal expected, actual
+  end
+
+  def test_select_tag_with_prompt_and_include_blank
+    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :prompt => "string", :include_blank => true
+    expected = %(<select name="places" id="places"><option value="">string</option><option value=""></option><option>Home</option><option>Work</option><option>Pub</option></select>)
     assert_dom_equal expected, actual
   end
 

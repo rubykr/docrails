@@ -9,32 +9,46 @@ class Object
   #
   # ==== Examples
   #
-  # Without try
+  # Without +try+
   #   @person && @person.name
   # or
   #   @person ? @person.name : nil
   #
-  # With try
+  # With +try+
   #   @person.try(:name)
   #
   # +try+ also accepts arguments and/or a block, for the method it is trying
   #   Person.try(:find, 1)
   #   @people.try(:collect) {|p| p.name}
   #
-  # Without a method argument try will yield to the block unless the reciever is nil.
+  # Without a method argument try will yield to the block unless the receiver is nil.
   #   @person.try { |p| "#{p.first_name} #{p.last_name}" }
   #--
   # +try+ behaves like +Object#send+, unless called on +NilClass+.
   def try(*a, &b)
     if a.empty? && block_given?
       yield self
+    elsif !a.empty? && !respond_to?(a.first)
+      nil
     else
       __send__(*a, &b)
     end
   end
 end
 
-class NilClass #:nodoc:
+class NilClass
+  # Calling +try+ on +nil+ always returns +nil+.
+  # It becomes specially helpful when navigating through associations that may return +nil+.
+  #
+  # === Examples
+  #
+  #   nil.try(:name) # => nil
+  #
+  # Without +try+
+  #   @person && !@person.children.blank? && @person.children.first.name
+  #
+  # With +try+
+  #   @person.try(:children).try(:first).try(:name)
   def try(*args)
     nil
   end

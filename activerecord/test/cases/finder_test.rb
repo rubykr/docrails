@@ -74,6 +74,11 @@ class FinderTest < ActiveRecord::TestCase
     end
   end
 
+  def test_exists_does_not_instantiate_records
+    Developer.expects(:instantiate).never
+    Developer.exists?
+  end
+
   def test_find_by_array_of_one_id
     assert_kind_of(Array, Topic.find([ 1 ]))
     assert_equal(1, Topic.find([ 1 ]).length)
@@ -124,11 +129,13 @@ class FinderTest < ActiveRecord::TestCase
   def test_find_all_with_limit_and_offset_and_multiple_order_clauses
     first_three_posts = Post.find :all, :order => 'author_id, id', :limit => 3, :offset => 0
     second_three_posts = Post.find :all, :order => ' author_id,id ', :limit => 3, :offset => 3
-    last_posts = Post.find :all, :order => ' author_id, id  ', :limit => 3, :offset => 6
+    third_three_posts = Post.find :all, :order => ' author_id, id  ', :limit => 3, :offset => 6
+    last_posts = Post.find :all, :order => ' author_id, id  ', :limit => 3, :offset => 9
 
     assert_equal [[0,3],[1,1],[1,2]], first_three_posts.map { |p| [p.author_id, p.id] }
     assert_equal [[1,4],[1,5],[1,6]], second_three_posts.map { |p| [p.author_id, p.id] }
-    assert_equal [[2,7]], last_posts.map { |p| [p.author_id, p.id] }
+    assert_equal [[2,7],[2,9],[2,11]], third_three_posts.map { |p| [p.author_id, p.id] }
+    assert_equal [[3,8],[3,10]], last_posts.map { |p| [p.author_id, p.id] }
   end
 
 
@@ -189,6 +196,46 @@ class FinderTest < ActiveRecord::TestCase
     assert_nil Topic.where("title = 'The Second Topic of the day!'").first
   end
 
+  def test_first_bang_present
+    assert_nothing_raised do
+      assert_equal topics(:second), Topic.where("title = 'The Second Topic of the day'").first!
+    end
+  end
+
+  def test_first_bang_missing
+    assert_raises ActiveRecord::RecordNotFound do
+      Topic.where("title = 'This title does not exist'").first!
+    end
+  end
+
+  def test_model_class_responds_to_first_bang
+    assert Topic.first!
+    Topic.delete_all
+    assert_raises ActiveRecord::RecordNotFound do
+      Topic.first!
+    end
+  end
+
+  def test_last_bang_present
+    assert_nothing_raised do
+      assert_equal topics(:second), Topic.where("title = 'The Second Topic of the day'").last!
+    end
+  end
+
+  def test_last_bang_missing
+    assert_raises ActiveRecord::RecordNotFound do
+      Topic.where("title = 'This title does not exist'").last!
+    end
+  end
+
+  def test_model_class_responds_to_last_bang
+    assert_equal topics(:fourth), Topic.last!
+    assert_raises ActiveRecord::RecordNotFound do
+      Topic.delete_all
+      Topic.last!
+    end
+  end
+
   def test_unexisting_record_exception_handling
     assert_raise(ActiveRecord::RecordNotFound) {
       Topic.find(1).parent
@@ -200,9 +247,10 @@ class FinderTest < ActiveRecord::TestCase
   def test_find_only_some_columns
     topic = Topic.find(1, :select => "author_name")
     assert_raise(ActiveModel::MissingAttributeError) {topic.title}
+    assert_nil topic.read_attribute("title")
     assert_equal "David", topic.author_name
     assert !topic.attribute_present?("title")
-    #assert !topic.respond_to?("title")
+    assert !topic.attribute_present?(:title)
     assert topic.attribute_present?("author_name")
     assert_respond_to topic, "author_name"
   end
@@ -635,6 +683,27 @@ class FinderTest < ActiveRecord::TestCase
     assert_nil Topic.find_last_by_title_and_author_name(topic.title, "Anonymous")
   end
 
+  def test_find_last_with_limit_gives_same_result_when_loaded_and_unloaded
+    scope = Topic.limit(2)
+    unloaded_last = scope.last
+    loaded_last = scope.all.last
+    assert_equal loaded_last, unloaded_last
+  end
+
+  def test_find_last_with_limit_and_offset_gives_same_result_when_loaded_and_unloaded
+    scope = Topic.offset(2).limit(2)
+    unloaded_last = scope.last
+    loaded_last = scope.all.last
+    assert_equal loaded_last, unloaded_last
+  end
+
+  def test_find_last_with_offset_gives_same_result_when_loaded_and_unloaded
+    scope = Topic.offset(3)
+    unloaded_last = scope.last
+    loaded_last = scope.all.last
+    assert_equal loaded_last, unloaded_last
+  end
+
   def test_find_all_by_one_attribute
     topics = Topic.find_all_by_content("Have a nice day")
     assert_equal 2, topics.size
@@ -995,6 +1064,29 @@ class FinderTest < ActiveRecord::TestCase
 
     assert_equal 3, Post.find(:all, :include => { :author => :author_address, :authors => :author_address},
                               :order => ' author_addresses_authors.id DESC ', :limit => 3).size
+  end
+
+  def test_find_with_nil_inside_set_passed_for_one_attribute
+    client_of = Company.find(
+      :all,
+      :conditions => {
+        :client_of => [2, 1, nil],
+        :name => ['37signals', 'Summit', 'Microsoft'] },
+      :order => 'client_of DESC'
+    ).map { |x| x.client_of }
+
+    assert client_of.include?(nil)
+    assert_equal [2, 1].sort, client_of.compact.sort
+  end
+
+  def test_find_with_nil_inside_set_passed_for_attribute
+    client_of = Company.find(
+      :all,
+      :conditions => { :client_of => [nil] },
+      :order => 'client_of DESC'
+    ).map { |x| x.client_of }
+
+    assert_equal [], client_of.compact
   end
 
   def test_with_limiting_with_custom_select

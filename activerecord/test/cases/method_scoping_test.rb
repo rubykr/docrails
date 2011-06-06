@@ -68,7 +68,7 @@ class MethodScopingTest < ActiveRecord::TestCase
 
   def test_scoped_find_all
     Developer.send(:with_scope, :find => { :conditions => "name = 'David'" }) do
-      assert_equal [developers(:david)], Developer.find(:all)
+      assert_equal [developers(:david)], Developer.all
     end
   end
 
@@ -235,36 +235,35 @@ class MethodScopingTest < ActiveRecord::TestCase
   def test_immutable_scope
     options = { :conditions => "name = 'David'" }
     Developer.send(:with_scope, :find => options) do
-      assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+      assert_equal %w(David), Developer.all.map(&:name)
       options[:conditions] = "name != 'David'"
-      assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+      assert_equal %w(David), Developer.all.map(&:name)
     end
 
     scope = { :find => { :conditions => "name = 'David'" }}
     Developer.send(:with_scope, scope) do
-      assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+      assert_equal %w(David), Developer.all.map(&:name)
       scope[:find][:conditions] = "name != 'David'"
-      assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+      assert_equal %w(David), Developer.all.map(&:name)
     end
   end
 
   def test_scoped_with_duck_typing
-    scoping = Struct.new(:method_scoping).new(:find => { :conditions => ["name = ?", 'David'] })
+    scoping = Struct.new(:current_scope).new(:find => { :conditions => ["name = ?", 'David'] })
     Developer.send(:with_scope, scoping) do
-       assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+       assert_equal %w(David), Developer.all.map(&:name)
     end
   end
 
   def test_ensure_that_method_scoping_is_correctly_restored
-    scoped_methods = Developer.instance_eval('current_scoped_methods')
-
     begin
       Developer.send(:with_scope, :find => { :conditions => "name = 'Jamis'" }) do
         raise "an exception"
       end
     rescue
     end
-    assert_equal scoped_methods, Developer.instance_eval('current_scoped_methods')
+
+    assert !Developer.scoped.where_values.include?("name = 'Jamis'")
   end
 end
 
@@ -433,7 +432,7 @@ class NestedScopingTest < ActiveRecord::TestCase
   def test_merged_scoped_find_combines_and_sanitizes_conditions
     Developer.send(:with_scope, :find => { :conditions => ["name = ?", 'David'] }) do
       Developer.send(:with_scope, :find => { :conditions => ['salary > ?', 9000] }) do
-        assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+        assert_equal %w(David), Developer.all.map(&:name)
       end
     end
   end
@@ -488,9 +487,9 @@ class NestedScopingTest < ActiveRecord::TestCase
     options2 = { :conditions => "name = 'David'" }
     Developer.send(:with_scope, :find => options1) do
       Developer.send(:with_exclusive_scope, :find => options2) do
-        assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+        assert_equal %w(David), Developer.all.map(&:name)
         options1[:conditions] = options2[:conditions] = nil
-        assert_equal %w(David), Developer.find(:all).map { |d| d.name }
+        assert_equal %w(David), Developer.all.map(&:name)
       end
     end
   end
@@ -500,23 +499,24 @@ class NestedScopingTest < ActiveRecord::TestCase
     options2 = { :conditions => "salary > 10000" }
     Developer.send(:with_scope, :find => options1) do
       Developer.send(:with_scope, :find => options2) do
-        assert_equal %w(Jamis), Developer.find(:all).map { |d| d.name }
+        assert_equal %w(Jamis), Developer.all.map(&:name)
         options1[:conditions] = options2[:conditions] = nil
-        assert_equal %w(Jamis), Developer.find(:all).map { |d| d.name }
+        assert_equal %w(Jamis), Developer.all.map(&:name)
       end
     end
   end
 
   def test_ensure_that_method_scoping_is_correctly_restored
     Developer.send(:with_scope, :find => { :conditions => "name = 'David'" }) do
-      scoped_methods = Developer.instance_eval('current_scoped_methods')
       begin
         Developer.send(:with_scope, :find => { :conditions => "name = 'Maiha'" }) do
           raise "an exception"
         end
       rescue
       end
-      assert_equal scoped_methods, Developer.instance_eval('current_scoped_methods')
+
+      assert Developer.scoped.where_values.include?("name = 'David'")
+      assert !Developer.scoped.where_values.include?("name = 'Maiha'")
     end
   end
 

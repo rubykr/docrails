@@ -15,6 +15,7 @@ module ActionView #:nodoc:
     end
 
     def find_all(path, prefixes = [], *args)
+      prefixes = [prefixes] if String === prefixes
       prefixes.each do |prefix|
         each do |resolver|
           templates = resolver.find_all(path, prefix, *args)
@@ -34,7 +35,7 @@ module ActionView #:nodoc:
       each_with_index do |path, i|
         path = path.to_s if path.is_a?(Pathname)
         next unless path.is_a?(String)
-        self[i] = FileSystemResolver.new(path)
+        self[i] = OptimizedFileSystemResolver.new(path)
       end
     end
   end

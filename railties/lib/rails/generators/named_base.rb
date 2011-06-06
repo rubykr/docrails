@@ -1,3 +1,4 @@
+require 'active_support/core_ext/module/introspection'
 require 'rails/generators/base'
 require 'rails/generators/generated_attribute'
 
@@ -8,7 +9,11 @@ module Rails
       class_option :skip_namespace, :type => :boolean, :default => false,
                                     :desc => "Skip namespace (affects only isolated applications)"
 
+      class_option :old_style_hash, :type => :boolean, :default => false,
+                                    :desc => "Force using old style hash (:foo => 'bar') on Ruby >= 1.9"
+
       def initialize(args, *options) #:nodoc:
+        @inside_template = nil
         # Unfreeze name in case it's given as a frozen string
         args[0] = args[0].dup if args[0].is_a?(String) && args[0].frozen?
         super
@@ -179,6 +184,16 @@ module Rails
             end
 
             class_collisions "#{options[:prefix]}#{name}#{options[:suffix]}"
+          end
+        end
+
+        # Returns Ruby 1.9 style key-value pair if current code is running on
+        # Ruby 1.9.x. Returns the old-style (with hash rocket) otherwise.
+        def key_value(key, value)
+          if options[:old_style_hash] || RUBY_VERSION < '1.9'
+            ":#{key} => #{value}"
+          else
+            "#{key}: #{value}"
           end
         end
     end

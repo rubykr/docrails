@@ -292,15 +292,15 @@ module AbstractController
       end
     end
 
-    attr_writer :action_has_layout
+    attr_internal_writer :action_has_layout
 
     def initialize(*)
-      @action_has_layout = true
+      @_action_has_layout = true
       super
     end
 
     def action_has_layout?
-      @action_has_layout
+      @_action_has_layout
     end
 
   private
@@ -334,7 +334,7 @@ module AbstractController
     # ==== Parameters
     # * <tt>details</tt> - A list of details to restrict the search by. This
     #   might include details like the format or locale of the template.
-    # * <tt>require_logout</tt> - If this is true, raise an ArgumentError
+    # * <tt>require_layout</tt> - If this is true, raise an ArgumentError
     #   with details about the fact that the exception could not be
     #   found (defaults to false)
     #

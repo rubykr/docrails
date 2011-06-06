@@ -6,6 +6,7 @@ require 'active_support/core_ext/class/attribute'
 require 'active_support/core_ext/hash/slice'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/string/output_safety'
+require 'active_support/core_ext/array/extract_options'
 
 module ActionView
   # = Action View Form Helpers
@@ -101,6 +102,11 @@ module ActionView
       include FormTagHelper
       include UrlHelper
 
+      # Converts the given object to an ActiveModel compliant one.
+      def convert_to_model(object)
+        object.respond_to?(:to_model) ? object.to_model : object
+      end
+
       # Creates a form and a scope around a specific model object that is used
       # as a base for questioning about values for the fields.
       #
@@ -184,7 +190,7 @@ module ActionView
       #
       # is equivalent to something like:
       #
-      #   <%= form_for @post, :as => :post, :url => post_path(@post), :html => { :method => :put, :class => "edit_post", :id => "edit_post_45" } do |f| %>
+      #   <%= form_for @post, :as => :post, :url => post_path(@post), :method => :put, :html => { :class => "edit_post", :id => "edit_post_45" } do |f| %>
       #     ...
       #   <% end %>
       #
@@ -196,13 +202,13 @@ module ActionView
       #
       # is equivalent to something like:
       #
-      #   <%= form_for @post, :as => :post, :url => post_path(@post), :html => { :class => "new_post", :id => "new_post" } do |f| %>
+      #   <%= form_for @post, :as => :post, :url => posts_path, :html => { :class => "new_post", :id => "new_post" } do |f| %>
       #     ...
       #   <% end %>
       #
       # You can also overwrite the individual conventions, like this:
       #
-      #   <%= form_for(@post, :url => super_post_path(@post)) do |f| %>
+      #   <%= form_for(@post, :url => super_posts_path) do |f| %>
       #     ...
       #   <% end %>
       #
@@ -235,6 +241,16 @@ module ActionView
       # Where <tt>@document = Document.find(params[:id])</tt> and
       # <tt>@comment = Comment.new</tt>.
       #
+      # === Setting the method
+      #
+      # You can force the form to use the full array of HTTP verbs by setting
+      #
+      #    :method => (:get|:post|:put|:delete)
+      #
+      # in the options hash. If the verb is not GET or POST, which are natively supported by HTML forms, the
+      # form will be set to POST and a hidden input called _method will carry the intended verb for the server
+      # to interpret.
+      #
       # === Unobtrusive JavaScript
       #
       # Specifying:
@@ -262,6 +278,24 @@ module ActionView
       #     ...
       #   </form>
       #
+      # === Removing hidden model id's
+      #
+      # The form_for method automatically includes the model id as a hidden field in the form.
+      # This is used to maintain the correlation between the form data and its associated model.
+      # Some ORM systems do not use IDs on nested models so in this case you want to be able
+      # to disable the hidden id.
+      #
+      # In the following example the Post model has many Comments stored within it in a NoSQL database,
+      # thus there is no primary key for comments.
+      #
+      # Example:
+      #
+      #   <%= form(@post) do |f| %>
+      #     <% f.fields_for(:comments, :include_id => false) do |cf| %>
+      #       ...
+      #     <% end %>
+      #   <% end %>
+      #
       # === Customized form builders
       #
       # You can also build forms using a customized FormBuilder class. Subclass
@@ -279,7 +313,7 @@ module ActionView
       #
       # In this case, if you use this:
       #
-      #   <%= render :partial => f %>
+      #   <%= render f %>
       #
       # The rendered template is <tt>people/_labelling_form</tt> and the local
       # variable referencing the form builder is called
@@ -331,8 +365,9 @@ module ActionView
         end
 
         options[:html][:remote] = options.delete(:remote)
+        options[:html][:method] = options.delete(:method) if options.has_key?(:method)
         options[:html][:authenticity_token] = options.delete(:authenticity_token)
-        
+
         builder = options[:parent_builder] = instantiate_builder(object_name, object, options, &proc)
         fields_for = fields_for(object_name, object, options, &proc)
         default_options = builder.multipart? ? { :multipart => true } : {}
@@ -520,6 +555,19 @@ module ActionView
       #     ...
       #   <% end %>
       #
+      # In addition, you may want to have access to the current iteration index.
+      # In that case, you can use a similar method called fields_for_with_index
+      # which receives a block with an extra parameter:
+      #
+      #   <%= form_for @person do |person_form| %>
+      #     ...
+      #     <%= person_form.fields_for_with_index :projects do |project_fields, index| %>
+      #       Position: <%= index %>
+      #       Name: <%= project_fields.text_field :name %>
+      #     <% end %>
+      #     ...
+      #   <% end %>
+      #
       # When projects is already an association on Person you can use
       # +accepts_nested_attributes_for+ to define the writer method for you:
       #
@@ -549,8 +597,8 @@ module ActionView
       #     <% end %>
       #     ...
       #   <% end %>
-      def fields_for(record, record_object = nil, options = {}, &block)
-        builder = instantiate_builder(record, record_object, options, &block)
+      def fields_for(record_name, record_object = nil, options = {}, &block)
+        builder = instantiate_builder(record_name, record_object, options, &block)
         output = capture(builder, &block)
         output.concat builder.hidden_field(:id) if output && options[:hidden_field_id] && !builder.emitted_hidden_id?
         output
@@ -580,10 +628,11 @@ module ActionView
       #   label(:post, :body)
       #   # => <label for="post_body">Write your entire text here</label>
       #
-      #   Localization can also be based purely on the translation of the attribute-name like this:
+      # Localization can also be based purely on the translation of the attribute-name
+      # (if you are using ActiveRecord):
       #
-      #   activemodel:
-      #     attribute:
+      #   activerecord:
+      #     attributes:
       #       post:
       #         cost: "Total cost"
       #
@@ -862,16 +911,13 @@ module ActionView
 
       private
 
-        def instantiate_builder(record, record_object = nil, options = nil, &block)
-          options, record_object = record_object, nil if record_object.is_a?(Hash)
-          options ||= {}
-
-          case record
+        def instantiate_builder(record_name, record_object, options, &block)
+          case record_name
           when String, Symbol
             object = record_object
-            object_name = record
+            object_name = record_name
           else
-            object = record
+            object = record_name
             object_name = ActiveModel::Naming.param_key(object)
           end
 
@@ -916,7 +962,8 @@ module ActionView
           label_tag(name_and_id["id"], options, &block)
         else
           content = if text.blank?
-            I18n.t("helpers.label.#{object_name}.#{method_name}", :default => "").presence
+            method_and_value = tag_value.present? ? "#{method_name}.#{tag_value}" : method_name
+            I18n.t("helpers.label.#{object_name}.#{method_and_value}", :default => "").presence
           else
             text.to_s
           end
@@ -1135,7 +1182,7 @@ module ActionView
     class FormBuilder
       # The methods which wrap a form helper call.
       class_attribute :field_helpers
-      self.field_helpers = (FormHelper.instance_method_names - ['form_for'])
+      self.field_helpers = FormHelper.instance_method_names - %w(form_for convert_to_model)
 
       attr_accessor :object_name, :object, :options
 
@@ -1182,35 +1229,37 @@ module ActionView
         RUBY_EVAL
       end
 
-      def fields_for(record_or_name_or_array, *args, &block)
-        if options.has_key?(:index)
-          index = "[#{options[:index]}]"
-        elsif defined?(@auto_index)
-          self.object_name = @object_name.to_s.sub(/\[\]$/,"")
-          index = "[#{@auto_index}]"
-        else
-          index = ""
-        end
+      # Check +fields_for+ for docs and examples.
+      def fields_for_with_index(record_name, record_object = nil, fields_options = {}, &block)
+        index = fields_options[:index] || options[:child_index] || nested_child_index(@object_name)
+        block_with_index = Proc.new{ |obj| block.call(obj, index) }
+        fields_for(record_name, record_object, fields_options, &block_with_index)
+      end
 
-        args << {} unless args.last.is_a?(Hash)
-        args.last[:builder] ||= options[:builder]
-        args.last[:parent_builder] = self
+      def fields_for(record_name, record_object = nil, fields_options = {}, &block)
+        fields_options, record_object = record_object, nil if record_object.is_a?(Hash)
+        fields_options[:builder] ||= options[:builder]
+        fields_options[:parent_builder] = self
 
-        case record_or_name_or_array
+        case record_name
         when String, Symbol
-          if nested_attributes_association?(record_or_name_or_array)
-            return fields_for_with_nested_attributes(record_or_name_or_array, args, block)
-          else
-            name = record_or_name_or_array
+          if nested_attributes_association?(record_name)
+            return fields_for_with_nested_attributes(record_name, record_object, fields_options, block)
           end
         else
-          object = record_or_name_or_array.is_a?(Array) ? record_or_name_or_array.last : record_or_name_or_array
-          name   = ActiveModel::Naming.param_key(object)
-          args.unshift(object)
+          record_object = record_name.is_a?(Array) ? record_name.last : record_name
+          record_name   = ActiveModel::Naming.param_key(record_object)
         end
-        name = "#{object_name}#{index}[#{name}]"
 
-        @template.fields_for(name, *args, &block)
+        index = if options.has_key?(:index)
+          "[#{options[:index]}]"
+        elsif defined?(@auto_index)
+          self.object_name = @object_name.to_s.sub(/\[\]$/,"")
+          "[#{@auto_index}]"
+        end
+        record_name = "#{object_name}#{index}[#{record_name}]"
+
+        @template.fields_for(record_name, record_object, fields_options, &block)
       end
 
       def label(method, text = nil, options = {}, &block)
@@ -1299,10 +1348,8 @@ module ActionView
           @object.respond_to?("#{association_name}_attributes=")
         end
 
-        def fields_for_with_nested_attributes(association_name, args, block)
+        def fields_for_with_nested_attributes(association_name, association, options, block)
           name = "#{object_name}[#{association_name}_attributes]"
-          options = args.extract_options!
-          association = args.shift
           association = convert_to_model(association)
 
           if association.respond_to?(:persisted?)
@@ -1326,7 +1373,9 @@ module ActionView
         def fields_for_nested_model(name, object, options, block)
           object = convert_to_model(object)
 
-          options[:hidden_field_id] = object.persisted?
+          parent_include_id = self.options.fetch(:include_id, true)
+          include_id = options.fetch(:include_id, parent_include_id)
+          options[:hidden_field_id] = object.persisted? && include_id
           @template.fields_for(name, object, options, &block)
         end
 

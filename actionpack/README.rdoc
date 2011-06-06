@@ -19,9 +19,8 @@ It consists of several modules:
 
 * Action View, which handles view template lookup and rendering, and provides
   view helpers that assist when building HTML forms, Atom feeds and more.
-  Template formats that Action View handles are ERb (embedded Ruby, typically
-  used to inline short Ruby snippets inside HTML), XML Builder and RJS
-  (dynamically generated JavaScript from Ruby code).
+  Template formats that Action View handles are ERB (embedded Ruby, typically
+  used to inline short Ruby snippets inside HTML), and XML Builder.
 
 With the Ruby on Rails framework, users only directly interface with the
 Action Controller module. Necessary Action Dispatch functionality is activated
@@ -34,7 +33,7 @@ A short rundown of some of the major features:
 * Actions grouped in controller as methods instead of separate command objects
   and can therefore share helper methods
 
-    CustomersController < ActionController::Base
+    class CustomersController < ActionController::Base
       def show
         @customer = find_customer
       end
@@ -57,9 +56,9 @@ A short rundown of some of the major features:
   {Learn more}[link:classes/ActionController/Base.html]
 
 
-* ERb templates (static content mixed with dynamic output from ruby)
+* ERB templates (static content mixed with dynamic output from ruby)
 
-    <% for post in @posts %>
+    <% @posts.each do |post| %>
       Title: <%= post.title %>
     <% end %>
 
@@ -82,7 +81,7 @@ A short rundown of some of the major features:
         xml.language "en-us"
         xml.ttl "40"
 
-        for item in @recent_items
+        @recent_items.each do |item|
           xml.item do
             xml.title(item_title(item))
             xml.description(item_description(item))
@@ -294,7 +293,7 @@ And the templates look like this:
     </body></html>
 
   weblog/index.html.erb:
-    <% for post in @posts %>
+    <% @posts.each do |post| %>
       <p><%= link_to(post.title, :action => "show", :id => post.id) %></p>
     <% end %>
 
@@ -323,7 +322,7 @@ The latest version of Action Pack can be installed with Rubygems:
 
 Source code can be downloaded as part of the Rails project on GitHub
 
-* http://github.com/rails/rails/tree/master/actionpack/
+* https://github.com/rails/rails/tree/master/actionpack/
 
 
 == License
@@ -335,8 +334,8 @@ Action Pack is released under the MIT license.
 
 API documentation is at
 
-* http://api.rubyonrails.com
+* http://api.rubyonrails.org
 
 Bug reports and feature requests can be filed with the rest for the Ruby on Rails project here:
 
-* https://rails.lighthouseapp.com/projects/8994-ruby-on-rails/tickets
+* https://github.com/rails/rails/issues

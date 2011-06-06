@@ -1,8 +1,10 @@
+require 'active_support/concern'
 require 'active_support/descendants_tracker'
 require 'active_support/core_ext/array/wrap'
 require 'active_support/core_ext/class/attribute'
 require 'active_support/core_ext/kernel/reporting'
 require 'active_support/core_ext/kernel/singleton_class'
+require 'active_support/core_ext/object/inclusion'
 
 module ActiveSupport
   # \Callbacks are code hooks that are run at key points in an object's lifecycle.
@@ -225,7 +227,10 @@ module ActiveSupport
           # end
           [@compiled_options[0], @filter, @compiled_options[1]].compact.join("\n")
         when :around
-          "end"
+          <<-RUBY_EVAL
+            value
+          end
+          RUBY_EVAL
         end
       end
 
@@ -408,11 +413,11 @@ module ActiveSupport
       # CallbackChain.
       #
       def __update_callbacks(name, filters = [], block = nil) #:nodoc:
-        type = [:before, :after, :around].include?(filters.first) ? filters.shift : :before
+        type = filters.first.in?([:before, :after, :around]) ? filters.shift : :before
         options = filters.last.is_a?(Hash) ? filters.pop : {}
         filters.unshift(block) if block
 
-        ([self] + ActiveSupport::DescendantsTracker.descendants(self)).each do |target|
+        ([self] + ActiveSupport::DescendantsTracker.descendants(self)).reverse.each do |target|
           chain = target.send("_#{name}_callbacks")
           yield target, chain.dup, type, filters, options
           target.__define_runner(name)
@@ -423,7 +428,7 @@ module ActiveSupport
       #
       #   set_callback :save, :before, :before_meth
       #   set_callback :save, :after,  :after_meth, :if => :condition
-      #   set_callback :save, :around, lambda { |r| stuff; yield; stuff }
+      #   set_callback :save, :around, lambda { |r| stuff; result = yield; stuff }
       #
       # The second arguments indicates whether the callback is to be run +:before+,
       # +:after+, or +:around+ the event. If omitted, +:before+ is assumed. This
@@ -442,6 +447,9 @@ module ActiveSupport
       #
       # Before and around callbacks are called in the order that they are set; after
       # callbacks are called in the reverse order.
+      # 
+      # Around callbacks can access the return value from the event, if it
+      # wasn't halted, from the +yield+ call.
       #
       # ===== Options
       #

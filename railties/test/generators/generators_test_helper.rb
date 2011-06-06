@@ -12,7 +12,7 @@ Rails.application.config.generators.templates = [File.join(Rails.root, "lib", "t
 
 # Call configure to load the settings from
 # Rails.application.config.generators to Rails::Generators
-Rails::Generators.configure!
+Rails.application.load_generators
 
 require 'active_record'
 require 'action_dispatch'
@@ -34,6 +34,6 @@ module GeneratorsTestHelper
     routes = File.expand_path("../../../lib/rails/generators/rails/app/templates/config/routes.rb", __FILE__)
     destination = File.join(destination_root, "config")
     FileUtils.mkdir_p(destination)
-    FileUtils.cp File.expand_path(routes), destination
+    FileUtils.cp routes, destination
   end
 end

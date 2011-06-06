@@ -1,9 +1,10 @@
 require 'mail'
-require 'action_mailer/tmail_compat'
 require 'action_mailer/collector'
 require 'active_support/core_ext/array/wrap'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/proc'
+require 'active_support/core_ext/string/inflections'
+require 'active_support/core_ext/hash/except'
 require 'action_mailer/log_subscriber'
 
 module ActionMailer #:nodoc:
@@ -129,9 +130,6 @@ module ActionMailer #:nodoc:
   #
   #   config.action_mailer.default_url_options = { :host => "example.com" }
   #
-  # Setting <tt>ActionMailer::Base.default_url_options</tt> directly is now deprecated, use the configuration
-  # option mentioned above to set the default host.
-  #
   # If you do decide to set a default <tt>:host</tt> for your mailers you want to use the
   # <tt>:only_path => false</tt> option when using <tt>url_for</tt>. This will ensure that absolute URLs are
   # generated because the <tt>url_for</tt> view helper will, by default, generate relative URLs when a
@@ -214,7 +212,7 @@ module ActionMailer #:nodoc:
   #
   # = Observing and Intercepting Mails
   #
-  # Action Mailer provides hooks into the Mail observer and interceptor methods.  These allow you to
+  # Action Mailer provides hooks into the Mail observer and interceptor methods. These allow you to
   # register objects that are called during the mail delivery life cycle.
   #
   # An observer object must implement the <tt>:delivered_email(message)</tt> method which will be
@@ -222,7 +220,7 @@ module ActionMailer #:nodoc:
   #
   # An interceptor object must implement the <tt>:delivering_email(message)</tt> method which will be
   # called before the email is sent, allowing you to make modifications to the email before it hits
-  # the delivery agents.  Your object should make any needed modifications directly to the passed
+  # the delivery agents. Your object should make any needed modifications directly to the passed
   # in Mail::Message instance.
   #
   # = Default Hash
@@ -291,10 +289,14 @@ module ActionMailer #:nodoc:
   #   * <tt>:authentication</tt> - If your mail server requires authentication, you need to specify the
   #     authentication type here.
   #     This is a symbol and one of <tt>:plain</tt> (will send the password in the clear), <tt>:login</tt> (will
-  #     send password BASE64 encoded) or <tt>:cram_md5</tt> (combines a Challenge/Response mechanism to exchange
+  #     send password Base64 encoded) or <tt>:cram_md5</tt> (combines a Challenge/Response mechanism to exchange
   #     information and a cryptographic Message Digest 5 algorithm to hash important information)
   #   * <tt>:enable_starttls_auto</tt> - When set to true, detects if STARTTLS is enabled in your SMTP server
   #     and starts to use it.
+  #   * <tt>:openssl_verify_mode</tt> - When using TLS, you can set how OpenSSL checks the certificate. This is
+  #     really useful if you need to validate a self-signed and/or a wildcard certificate. You can use the name
+  #     of an OpenSSL verify constant ('none', 'peer', 'client_once','fail_if_no_peer_cert') or directly the
+  #     constant  (OpenSSL::SSL::VERIFY_NONE, OpenSSL::SSL::VERIFY_PEER,...).
   #
   # * <tt>sendmail_settings</tt> - Allows you to override options for the <tt>:sendmail</tt> delivery method.
   #   * <tt>:location</tt> - The location of the sendmail executable. Defaults to <tt>/usr/sbin/sendmail</tt>.
@@ -309,29 +311,16 @@ module ActionMailer #:nodoc:
   #
   # * <tt>delivery_method</tt> - Defines a delivery method. Possible values are <tt>:smtp</tt> (default),
   #   <tt>:sendmail</tt>, <tt>:test</tt>, and <tt>:file</tt>. Or you may provide a custom delivery method
-  #   object eg. MyOwnDeliveryMethodClass.new.  See the Mail gem documentation on the interface you need to
+  #   object eg. MyOwnDeliveryMethodClass.new. See the Mail gem documentation on the interface you need to
   #   implement for a custom delivery agent.
   #
   # * <tt>perform_deliveries</tt> - Determines whether emails are actually sent from Action Mailer when you
-  #   call <tt>.deliver</tt> on an mail message or on an Action Mailer method.  This is on by default but can
+  #   call <tt>.deliver</tt> on an mail message or on an Action Mailer method. This is on by default but can
   #   be turned off to aid in functional testing.
   #
   # * <tt>deliveries</tt> - Keeps an array of all the emails sent out through the Action Mailer with
   #   <tt>delivery_method :test</tt>. Most useful for unit and functional testing.
   #
-  # * <tt>default_charset</tt> - This is now deprecated, use the +default+ method above to
-  #   set the default +:charset+.
-  #
-  # * <tt>default_content_type</tt> - This is now deprecated, use the +default+ method above
-  #   to set the default +:content_type+.
-  #
-  # * <tt>default_mime_version</tt> - This is now deprecated, use the +default+ method above
-  #   to set the default +:mime_version+.
-  #
-  # * <tt>default_implicit_parts_order</tt> - This is now deprecated, use the +default+ method above
-  #   to set the default +:parts_order+.  Parts Order is used when a message is built implicitly
-  #   (i.e. multiple parts are assembled from templates which specify the content type in their
-  #   filenames) this variable controls how the parts are ordered.
   class Base < AbstractController::Base
     include DeliveryMethods
     abstract!
@@ -343,14 +332,9 @@ module ActionMailer #:nodoc:
     include AbstractController::Translation
     include AbstractController::AssetPaths
 
-    cattr_reader :protected_instance_variables
-    @@protected_instance_variables = []
+    self.protected_instance_variables = %w(@_action_has_layout)
 
     helper  ActionMailer::MailHelper
-    include ActionMailer::OldApi
-
-    delegate :register_observer, :to => Mail
-    delegate :register_interceptor, :to => Mail
 
     private_class_method :new #:nodoc:
 
@@ -363,6 +347,32 @@ module ActionMailer #:nodoc:
     }.freeze
 
     class << self
+      # Register one or more Observers which will be notified when mail is delivered.
+      def register_observers(*observers)
+        observers.flatten.compact.each { |observer| register_observer(observer) }
+      end
+
+      # Register one or more Interceptors which will be called before mail is sent.
+      def register_interceptors(*interceptors)
+        interceptors.flatten.compact.each { |interceptor| register_interceptor(interceptor) }
+      end
+
+      # Register an Observer which will be notified when mail is delivered.
+      # Either a class or a string can be passed in as the Observer. If a string is passed in
+      # it will be <tt>constantize</tt>d.
+      def register_observer(observer)
+        delivery_observer = (observer.is_a?(String) ? observer.constantize : observer)
+        Mail.register_observer(delivery_observer)
+      end
+
+      # Register an Inteceptor which will be called before mail is sent.
+      # Either a class or a string can be passed in as the Observer. If a string is passed in
+      # it will be <tt>constantize</tt>d.
+      def register_interceptor(interceptor)
+        delivery_interceptor = (interceptor.is_a?(String) ? interceptor.constantize : interceptor)
+        Mail.register_interceptor(delivery_interceptor)
+      end
+
       def mailer_name
         @mailer_name ||= name.underscore
       end
@@ -539,8 +549,8 @@ module ActionMailer #:nodoc:
     # method.
     #
     # When a <tt>:return_path</tt> is specified as header, that value will be used as the 'envelope from'
-    # address for the Mail message.  Setting this is useful when you want delivery notifications
-    # sent to a different address than the one in <tt>:from</tt>.  Mail will actually use the
+    # address for the Mail message. Setting this is useful when you want delivery notifications
+    # sent to a different address than the one in <tt>:from</tt>. Mail will actually use the
     # <tt>:return_path</tt> in preference to the <tt>:sender</tt> in preference to the <tt>:from</tt>
     # field for the 'envelope from' value.
     #
@@ -657,6 +667,9 @@ module ActionMailer #:nodoc:
       end
     end
 
+    # Translates the +subject+ using Rails I18n class under <tt>[:actionmailer, mailer_scope, action_name]</tt> scope.
+    # If it does not find a translation for the +subject+ under the specified scope it will default to a
+    # humanized version of the <tt>action_name</tt>.
     def default_i18n_subject #:nodoc:
       mailer_scope = self.class.mailer_name.gsub('/', '.')
       I18n.t(:subject, :scope => [mailer_scope, action_name], :default => action_name.humanize)

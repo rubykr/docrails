@@ -1,6 +1,7 @@
 require 'abstract_unit'
 require 'active_support/json'
 require 'active_support/core_ext/object/to_json'
+require 'active_support/core_ext/hash/indifferent_access'
 
 class OrderedHashTest < Test::Unit::TestCase
   def setup
@@ -241,6 +242,11 @@ class OrderedHashTest < Test::Unit::TestCase
     original = @ordered_hash.replace(@other_ordered_hash)
     assert_same original, @ordered_hash
     assert_equal @other_ordered_hash.keys, @ordered_hash.keys
+  end
+
+  def test_nested_under_indifferent_access
+    flash = {:a => ActiveSupport::OrderedHash[:b, 1, :c, 2]}.with_indifferent_access
+    assert_kind_of ActiveSupport::OrderedHash, flash[:a]
   end
 
   def test_each_after_yaml_serialization

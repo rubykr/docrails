@@ -2,6 +2,7 @@ require 'rack/session/abstract/id'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/object/to_query'
 require 'active_support/core_ext/class/attribute'
+require 'active_support/core_ext/module/anonymous'
 
 module ActionController
   module TemplateAssertions
@@ -129,7 +130,7 @@ module ActionController
       super
 
       self.session = TestSession.new
-      self.session_options = TestSession::DEFAULT_OPTIONS.merge(:id => ActiveSupport::SecureRandom.hex(16))
+      self.session_options = TestSession::DEFAULT_OPTIONS.merge(:id => SecureRandom.hex(16))
     end
 
     class Result < ::Array #:nodoc:
@@ -147,7 +148,9 @@ module ActionController
         if value.is_a? Fixnum
           value = value.to_s
         elsif value.is_a? Array
-          value = Result.new(value)
+          value = Result.new(value.map { |v| v.is_a?(String) ? v.dup : v })
+        elsif value.is_a? String
+          value = value.dup
         end
 
         if extra_keys.include?(key.to_sym)
@@ -172,6 +175,10 @@ module ActionController
     end
 
     def recycle!
+      write_cookies!
+      @env.delete('HTTP_COOKIE') if @cookies.blank?
+      @env.delete('action_dispatch.cookies')
+      @cookies = nil
       @formats = nil
       @env.delete_if { |k, v| k =~ /^(action_dispatch|rack)\.request/ }
       @env.delete_if { |k, v| k =~ /^action_dispatch\.rescue/ }
@@ -301,7 +308,11 @@ module ActionController
   # and cookies, though. For sessions, you just do:
   #
   #   @request.session[:key] = "value"
-  #   @request.cookies["key"] = "value"
+  #   @request.cookies[:key] = "value"
+  #
+  # To clear the cookies for a test just clear the request's cookies hash:
+  #
+  #   @request.cookies.clear
   #
   # == \Testing named routes
   #
@@ -403,7 +414,11 @@ module ActionController
         @request.env['REQUEST_METHOD'] = http_method
 
         parameters ||= {}
-        @request.assign_parameters(@routes, @controller.class.name.underscore.sub(/_controller$/, ''), action.to_s, parameters)
+        controller_class_name = @controller.class.anonymous? ?
+          "anonymous_controller" :
+          @controller.class.name.underscore.sub(/_controller$/, '')
+
+        @request.assign_parameters(@routes, controller_class_name, action.to_s, parameters)
 
         @request.session = ActionController::TestSession.new(session) if session
         @request.session["flash"] = @request.flash.update(flash || {})
@@ -416,6 +431,7 @@ module ActionController
         @controller.process_with_new_base_test(@request, @response)
         @assigns = @controller.respond_to?(:view_assigns) ? @controller.view_assigns : {}
         @request.session.delete('flash') if @request.session['flash'].blank?
+        @request.cookies.merge!(@response.cookies)
         @response
       end
 

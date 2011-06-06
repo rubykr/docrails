@@ -165,7 +165,7 @@ module ActiveRecord
     # writing, the only database that we're aware of that supports true nested
     # transactions, is MS-SQL. Because of this, Active Record emulates nested
     # transactions by using savepoints on MySQL and PostgreSQL. See
-    # http://dev.mysql.com/doc/refman/5.0/en/savepoints.html
+    # http://dev.mysql.com/doc/refman/5.0/en/savepoint.html
     # for more information about savepoints.
     #
     # === Callbacks
@@ -270,6 +270,7 @@ module ActiveRecord
     def rolledback!(force_restore_state = false) #:nodoc:
       run_callbacks :rollback
     ensure
+      IdentityMap.remove(self) if IdentityMap.enabled?
       restore_transaction_record_state(force_restore_state)
     end
 

@@ -49,8 +49,8 @@ module ActiveModel
   #
   # The last three methods are required in your object for Errors to be
   # able to generate error messages correctly and also handle multiple
-  # languages.  Of course, if you extend your object with ActiveModel::Translations
-  # you will not need to implement the last two.  Likewise, using
+  # languages. Of course, if you extend your object with ActiveModel::Translations
+  # you will not need to implement the last two. Likewise, using
   # ActiveModel::Validations will handle the validation related methods
   # for you.
   #
@@ -117,7 +117,7 @@ module ActiveModel
     end
 
     # Iterates through each error key, value pair in the error messages hash.
-    # Yields the attribute and the error for that attribute.  If the attribute
+    # Yields the attribute and the error for that attribute. If the attribute
     # has more than one error message, yields once for each error message.
     #
     #   p.errors.add(:name, "can't be blank")
@@ -248,7 +248,7 @@ module ActiveModel
     #
     #   company = Company.create(:address => '123 First St.')
     #   company.errors.full_messages # =>
-    #     ["Name is too short (minimum is 5 characters)", "Name can't be blank", "Address can't be blank"]
+    #     ["Name is too short (minimum is 5 characters)", "Name can't be blank", "Email can't be blank"]
     def full_messages
       map { |attribute, message|
         if attribute == :base
@@ -278,19 +278,18 @@ module ActiveModel
     # When using inheritance in your models, it will check all the inherited
     # models too, but only if the model itself hasn't been found. Say you have
     # <tt>class Admin < User; end</tt> and you wanted the translation for
-    # the <tt>:blank</tt> error +message+ for the <tt>title</tt> +attribute+,
+    # the <tt>:blank</tt> error message for the <tt>title</tt> attribute,
     # it looks for these translations:
     #
-    # <ol>
-    # <li><tt>activemodel.errors.models.admin.attributes.title.blank</tt></li>
-    # <li><tt>activemodel.errors.models.admin.blank</tt></li>
-    # <li><tt>activemodel.errors.models.user.attributes.title.blank</tt></li>
-    # <li><tt>activemodel.errors.models.user.blank</tt></li>
-    # <li>any default you provided through the +options+ hash (in the activemodel.errors scope)</li>
-    # <li><tt>activemodel.errors.messages.blank</tt></li>
-    # <li><tt>errors.attributes.title.blank</tt></li>
-    # <li><tt>errors.messages.blank</tt></li>
-    # </ol>
+    # * <tt>activemodel.errors.models.admin.attributes.title.blank</tt>
+    # * <tt>activemodel.errors.models.admin.blank</tt>
+    # * <tt>activemodel.errors.models.user.attributes.title.blank</tt>
+    # * <tt>activemodel.errors.models.user.blank</tt>
+    # * any default you provided through the +options+ hash (in the <tt>activemodel.errors</tt> scope)
+    # * <tt>activemodel.errors.messages.blank</tt>
+    # * <tt>errors.attributes.title.blank</tt>
+    # * <tt>errors.messages.blank</tt>
+    #
     def generate_message(attribute, type = :invalid, options = {})
       type = options.delete(:message) if options[:message].is_a?(Symbol)
 

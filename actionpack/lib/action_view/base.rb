@@ -8,13 +8,12 @@ require 'action_view/log_subscriber'
 module ActionView #:nodoc:
   # = Action View Base
   #
-  # Action View templates can be written in three ways. If the template file has a <tt>.erb</tt> (or <tt>.rhtml</tt>) extension then it uses a mixture of ERb
+  # Action View templates can be written in several ways. If the template file has a <tt>.erb</tt> (or <tt>.rhtml</tt>) extension then it uses a mixture of ERb
   # (included in Ruby) and HTML. If the template file has a <tt>.builder</tt> (or <tt>.rxml</tt>) extension then Jim Weirich's Builder::XmlMarkup library is used.
-  # If the template file has a <tt>.rjs</tt> extension then it will use ActionView::Helpers::PrototypeHelper::JavaScriptGenerator.
   #
-  # == ERb
+  # == ERB
   #
-  # You trigger ERb by using embeddings such as <% %>, <% -%>, and <%= %>. The <%= %> tag set is used when you want output. Consider the
+  # You trigger ERB by using embeddings such as <% %>, <% -%>, and <%= %>. The <%= %> tag set is used when you want output. Consider the
   # following loop for names:
   #
   #   <b>Names of all the people</b>
@@ -23,7 +22,7 @@ module ActionView #:nodoc:
   #   <% end %>
   #
   # The loop is setup in regular embedding tags <% %> and the name is written using the output embedding tag <%= %>. Note that this
-  # is not just a usage suggestion. Regular output functions like print or puts won't work with ERb templates. So this would be wrong:
+  # is not just a usage suggestion. Regular output functions like print or puts won't work with ERB templates. So this would be wrong:
   #
   #   <%# WRONG %>
   #   Hi, Mr. <% puts "Frodo" %>
@@ -81,16 +80,16 @@ module ActionView #:nodoc:
   #
   # == Builder
   #
-  # Builder templates are a more programmatic alternative to ERb. They are especially useful for generating XML content. An XmlMarkup object
+  # Builder templates are a more programmatic alternative to ERB. They are especially useful for generating XML content. An XmlMarkup object
   # named +xml+ is automatically made available to templates with a <tt>.builder</tt> extension.
   #
   # Here are some basic examples:
   #
-  #   xml.em("emphasized")                              # => <em>emphasized</em>
-  #   xml.em { xml.b("emph & bold") }                   # => <em><b>emph &amp; bold</b></em>
-  #   xml.a("A Link", "href"=>"http://onestepback.org") # => <a href="http://onestepback.org">A Link</a>
-  #   xml.target("name"=>"compile", "option"=>"fast")   # => <target option="fast" name="compile"\>
-  #                                                     # NOTE: order of attributes is not specified.
+  #   xml.em("emphasized")                                 # => <em>emphasized</em>
+  #   xml.em { xml.b("emph & bold") }                      # => <em><b>emph &amp; bold</b></em>
+  #   xml.a("A Link", "href" => "http://onestepback.org")  # => <a href="http://onestepback.org">A Link</a>
+  #   xml.target("name" => "compile", "option" => "fast")  # => <target option="fast" name="compile"\>
+  #                                                        # NOTE: order of attributes is not specified.
   #
   # Any method with a block will be treated as an XML markup tag with nested markup in the block. For example, the following:
   #
@@ -131,40 +130,17 @@ module ActionView #:nodoc:
   #   end
   #
   # More builder documentation can be found at http://builder.rubyforge.org.
-  #
-  # == JavaScriptGenerator
-  #
-  # JavaScriptGenerator templates end in <tt>.rjs</tt>. Unlike conventional templates which are used to
-  # render the results of an action, these templates generate instructions on how to modify an already rendered page. This makes it easy to
-  # modify multiple elements on your page in one declarative Ajax response. Actions with these templates are called in the background with Ajax
-  # and make updates to the page where the request originated from.
-  #
-  # An instance of the JavaScriptGenerator object named +page+ is automatically made available to your template, which is implicitly wrapped in an ActionView::Helpers::PrototypeHelper#update_page block.
-  #
-  # When an <tt>.rjs</tt> action is called with +link_to_remote+, the generated JavaScript is automatically evaluated.  Example:
-  #
-  #   link_to_remote :url => {:action => 'delete'}
-  #
-  # The subsequently rendered <tt>delete.rjs</tt> might look like:
-  #
-  #   page.replace_html  'sidebar', :partial => 'sidebar'
-  #   page.remove        "person-#{@person.id}"
-  #   page.visual_effect :highlight, 'user-list'
-  #
-  # This refreshes the sidebar, removes a person element and highlights the user list.
-  #
-  # See the ActionView::Helpers::PrototypeHelper::JavaScriptGenerator::GeneratorMethods documentation for more details.
   class Base
-    include Helpers, Rendering, Partials, ::ERB::Util, Context
-
-    # Specify whether RJS responses should be wrapped in a try/catch block
-    # that alert()s the caught exception (and then re-raises it).
-    cattr_accessor :debug_rjs
-    @@debug_rjs = false
+    include Helpers, ::ERB::Util, Context
 
     # Specify the proc used to decorate input tags that refer to attributes with errors.
     cattr_accessor :field_error_proc
     @@field_error_proc = Proc.new{ |html_tag, instance| "<div class=\"field_with_errors\">#{html_tag}</div>".html_safe }
+
+    # How to complete the streaming when an exception occurs.
+    # This is our best guess: first try to close the attribute, then the tag.
+    cattr_accessor :streaming_completion_on_exception
+    @@streaming_completion_on_exception = %("><script type="text/javascript">window.location = "/500.html"</script></html>)
 
     class_attribute :helpers
     class_attribute :_routes
@@ -180,60 +156,61 @@ module ActionView #:nodoc:
       def cache_template_loading=(value)
         ActionView::Resolver.caching = value
       end
+
+      def process_view_paths(value)
+        value.is_a?(PathSet) ?
+          value.dup : ActionView::PathSet.new(Array.wrap(value))
+      end
+
+      def xss_safe? #:nodoc:
+        true
+      end
+
+      # This method receives routes and helpers from the controller
+      # and return a subclass ready to be used as view context.
+      def prepare(routes, helpers) #:nodoc:
+        Class.new(self) do
+          if routes
+            include routes.url_helpers
+            include routes.mounted_helpers
+          end
+
+          if helpers
+            include helpers
+            self.helpers = helpers
+          end
+        end
+      end
     end
 
-    attr_accessor :_template
-    attr_internal :request, :controller, :config, :assigns, :lookup_context
+    attr_accessor :view_renderer
+    attr_internal :config, :assigns
 
+    delegate :lookup_context, :to => :view_renderer
     delegate :formats, :formats=, :locale, :locale=, :view_paths, :view_paths=, :to => :lookup_context
-
-    delegate :request_forgery_protection_token, :params, :session, :cookies, :response, :headers,
-             :flash, :action_name, :controller_name, :to => :controller
-
-    delegate :logger, :to => :controller, :allow_nil => true
-
-    def self.xss_safe? #:nodoc:
-      true
-    end
-
-    def self.process_view_paths(value)
-      value.is_a?(PathSet) ?
-        value.dup : ActionView::PathSet.new(Array.wrap(value))
-    end
 
     def assign(new_assigns) # :nodoc:
       @_assigns = new_assigns.each { |key, value| instance_variable_set("@#{key}", value) }
     end
 
-    def initialize(lookup_context = nil, assigns_for_first_render = {}, controller = nil, formats = nil) #:nodoc:
-      assign(assigns_for_first_render)
-      self.helpers = Module.new unless self.class.helpers
-
+    def initialize(context = nil, assigns = {}, controller = nil, formats = nil) #:nodoc:
       @_config = {}
-      @_content_for  = Hash.new { |h,k| h[k] = ActiveSupport::SafeBuffer.new }
-      @_virtual_path = nil
-      @output_buffer = nil
 
-      if @_controller = controller
-        @_request = controller.request if controller.respond_to?(:request)
-        @_config  = controller.config.inheritable_copy if controller.respond_to?(:config)
+      # Handle all these for backwards compatibility.
+      # TODO Provide a new API for AV::Base and deprecate this one.
+      if context.is_a?(ActionView::Renderer)
+        @view_renderer = context
+      elsif
+        lookup_context = context.is_a?(ActionView::LookupContext) ?
+          context : ActionView::LookupContext.new(context)
+        lookup_context.formats  = formats if formats
+        lookup_context.prefixes = controller._prefixes if controller
+        @view_renderer = ActionView::Renderer.new(lookup_context)
       end
 
-      @_lookup_context = lookup_context.is_a?(ActionView::LookupContext) ?
-        lookup_context : ActionView::LookupContext.new(lookup_context)
-      @_lookup_context.formats = formats if formats
-    end
-
-    def store_content_for(key, value)
-      @_content_for[key] = value
-    end
-
-    def controller_path
-      @controller_path ||= controller && controller.controller_path
-    end
-
-    def controller_prefixes
-      @controller_prefixes ||= controller && controller._prefixes
+      assign(assigns)
+      assign_controller(controller)
+      _prepare_context
     end
 
     ActiveSupport.run_load_hooks(:action_view, self)

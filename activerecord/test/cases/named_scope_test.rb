@@ -58,13 +58,6 @@ class NamedScopeTest < ActiveRecord::TestCase
     assert Topic.approved.respond_to?(:tables_in_string, true)
   end
 
-  def test_subclasses_inherit_scopes
-    assert Topic.scopes.include?(:base)
-
-    assert Reply.scopes.include?(:base)
-    assert_equal Reply.find(:all), Reply.base
-  end
-
   def test_scopes_with_options_limit_finds_to_those_matching_the_criteria_specified
     assert !Topic.find(:all, :conditions => {:approved => true}).empty?
 
@@ -242,6 +235,12 @@ class NamedScopeTest < ActiveRecord::TestCase
     assert_no_queries { assert topics.any? }
   end
 
+  def test_model_class_should_respond_to_any
+    assert Topic.any?
+    Topic.delete_all
+    assert !Topic.any?
+  end
+
   def test_many_should_not_load_results
     topics = Topic.base
     assert_queries(2) do
@@ -274,6 +273,15 @@ class NamedScopeTest < ActiveRecord::TestCase
 
   def test_many_should_return_true_if_more_than_one
     assert Topic.base.many?
+  end
+
+  def test_model_class_should_respond_to_many
+    Topic.delete_all
+    assert !Topic.many?
+    Topic.create!
+    assert !Topic.many?
+    Topic.create!
+    assert Topic.many?
   end
 
   def test_should_build_on_top_of_scope
@@ -421,26 +429,31 @@ class NamedScopeTest < ActiveRecord::TestCase
     end
   end
 
+  # Note: these next two are kinda odd because they are essentially just testing that the
+  # query cache works as it should, but they are here for legacy reasons as they was previously
+  # a separate cache on association proxies, and these show that that is not necessary.
   def test_scopes_are_cached_on_associations
     post = posts(:welcome)
 
-    assert_equal post.comments.containing_the_letter_e.object_id, post.comments.containing_the_letter_e.object_id
-
-    post.comments.containing_the_letter_e.all # force load
-    assert_no_queries { post.comments.containing_the_letter_e.all }
+    Post.cache do
+      assert_queries(1) { post.comments.containing_the_letter_e.all }
+      assert_no_queries { post.comments.containing_the_letter_e.all }
+    end
   end
 
   def test_scopes_with_arguments_are_cached_on_associations
     post = posts(:welcome)
 
-    one = post.comments.limit_by(1).all
-    assert_equal 1, one.size
+    Post.cache do
+      one = assert_queries(1) { post.comments.limit_by(1).all }
+      assert_equal 1, one.size
 
-    two = post.comments.limit_by(2).all
-    assert_equal 2, two.size
+      two = assert_queries(1) { post.comments.limit_by(2).all }
+      assert_equal 2, two.size
 
-    assert_no_queries { post.comments.limit_by(1).all }
-    assert_no_queries { post.comments.limit_by(2).all }
+      assert_no_queries { post.comments.limit_by(1).all }
+      assert_no_queries { post.comments.limit_by(2).all }
+    end
   end
 
   def test_scopes_are_reset_on_association_reload
@@ -449,7 +462,7 @@ class NamedScopeTest < ActiveRecord::TestCase
     [:destroy_all, :reset, :delete_all].each do |method|
       before = post.comments.containing_the_letter_e
       post.association(:comments).send(method)
-      assert before.object_id != post.comments.containing_the_letter_e.object_id, "AssociationCollection##{method} should reset the named scopes cache"
+      assert before.object_id != post.comments.containing_the_letter_e.object_id, "CollectionAssociation##{method} should reset the named scopes cache"
     end
   end
 

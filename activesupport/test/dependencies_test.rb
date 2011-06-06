@@ -24,11 +24,13 @@ class DependenciesTest < Test::Unit::TestCase
     old_mechanism, ActiveSupport::Dependencies.mechanism = ActiveSupport::Dependencies.mechanism, :load
     this_dir = File.dirname(__FILE__)
     parent_dir = File.dirname(this_dir)
+    path_copy = $LOAD_PATH.dup
     $LOAD_PATH.unshift(parent_dir) unless $LOAD_PATH.include?(parent_dir)
     prior_autoload_paths = ActiveSupport::Dependencies.autoload_paths
     ActiveSupport::Dependencies.autoload_paths = from.collect { |f| "#{this_dir}/#{f}" }
     yield
   ensure
+    $LOAD_PATH.replace(path_copy)
     ActiveSupport::Dependencies.autoload_paths = prior_autoload_paths
     ActiveSupport::Dependencies.mechanism = old_mechanism
     ActiveSupport::Dependencies.explicitly_unloadable_constants = []
@@ -477,15 +479,15 @@ class DependenciesTest < Test::Unit::TestCase
 
   def test_references_should_work
     with_loading 'dependencies' do
-      c = ActiveSupport::Dependencies.ref("ServiceOne")
+      c = ActiveSupport::Dependencies.reference("ServiceOne")
       service_one_first = ServiceOne
-      assert_equal service_one_first, c.get
+      assert_equal service_one_first, c.get("ServiceOne")
       ActiveSupport::Dependencies.clear
       assert ! defined?(ServiceOne)
 
       service_one_second = ServiceOne
-      assert_not_equal service_one_first, c.get
-      assert_equal service_one_second, c.get
+      assert_not_equal service_one_first, c.get("ServiceOne")
+      assert_equal service_one_second, c.get("ServiceOne")
     end
   end
 

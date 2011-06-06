@@ -5,6 +5,7 @@ class ConfigurableActiveSupport < ActiveSupport::TestCase
   class Parent
     include ActiveSupport::Configurable
     config_accessor :foo
+    config_accessor :bar, :instance_reader => false, :instance_writer => false
   end
 
   class Child < Parent
@@ -21,6 +22,12 @@ class ConfigurableActiveSupport < ActiveSupport::TestCase
     assert_equal({ :foo => :bar }, Parent.config)
   end
 
+  test "adds a configuration hash to a module as well" do
+    mixin = Module.new { include ActiveSupport::Configurable }
+    mixin.config.foo = :bar
+    assert_equal({ :foo => :bar }, mixin.config)
+  end
+
   test "configuration hash is inheritable" do
     assert_equal :bar, Child.config.foo
     assert_equal :bar, Parent.config.foo
@@ -28,6 +35,12 @@ class ConfigurableActiveSupport < ActiveSupport::TestCase
     Child.config.foo = :baz
     assert_equal :baz, Child.config.foo
     assert_equal :bar, Parent.config.foo
+  end
+
+  test "configuration accessors is not available on instance" do
+    instance = Parent.new
+    assert !instance.respond_to?(:bar)
+    assert !instance.respond_to?(:bar=)
   end
 
   test "configuration hash is available on instance" do

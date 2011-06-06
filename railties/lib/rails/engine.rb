@@ -92,17 +92,17 @@ module Rails
   # The available paths in an engine are:
   #
   #   class MyEngine < Rails::Engine
-  #     paths["app"]                 #=> ["app"]
-  #     paths["app/controllers"]     #=> ["app/controllers"]
-  #     paths["app/helpers"]         #=> ["app/helpers"]
-  #     paths["app/models"]          #=> ["app/models"]
-  #     paths["app/views"]           #=> ["app/views"]
-  #     paths["lib"]                 #=> ["lib"]
-  #     paths["lib/tasks"]           #=> ["lib/tasks"]
-  #     paths["config"]              #=> ["config"]
-  #     paths["config/initializers"] #=> ["config/initializers"]
-  #     paths["config/locales"]      #=> ["config/locales"]
-  #     paths["config/routes"]       #=> ["config/routes.rb"]
+  #     paths["app"]                 # => ["app"]
+  #     paths["app/controllers"]     # => ["app/controllers"]
+  #     paths["app/helpers"]         # => ["app/helpers"]
+  #     paths["app/models"]          # => ["app/models"]
+  #     paths["app/views"]           # => ["app/views"]
+  #     paths["lib"]                 # => ["lib"]
+  #     paths["lib/tasks"]           # => ["lib/tasks"]
+  #     paths["config"]              # => ["config"]
+  #     paths["config/initializers"] # => ["config/initializers"]
+  #     paths["config/locales"]      # => ["config/locales"]
+  #     paths["config/routes"]       # => ["config/routes.rb"]
   #   end
   #
   # Your <tt>Application</tt> class adds a couple more paths to this set. And as in your
@@ -171,32 +171,6 @@ module Rails
   #
   # Now, +Engine+ will get only requests that were not handled by +Application+.
   #
-  # == Asset path
-  #
-  # When you use +Engine+ with its own public directory, you will probably want to copy or symlink it
-  # to application's public directory. To simplify generating paths for assets, you can set <tt>asset_path</tt>
-  # for an engine:
-  #
-  #   module MyEngine
-  #     class Engine < Rails::Engine
-  #       config.asset_path = "/my_engine/%s"
-  #     end
-  #   end
-  #
-  # With such a config, asset paths will be automatically modified inside +Engine+:
-  #
-  #   image_path("foo.jpg") #=> "/my_engine/images/foo.jpg"
-  #
-  # == Serving static files
-  #
-  # By default, Rails uses <tt>ActionDispatch::Static</tt> to serve static files in development mode. This is ok
-  # while you develop your application, but when you want to deploy it, assets from an engine will not be
-  # served by default. You should choose one of the two following strategies:
-  #
-  # * enable serving static files by setting config.serve_static_assets to true
-  # * copy engine's public files to application's public folder with <tt>rake ENGINE_NAME:install:assets</tt>, for example
-  #   <tt>rake my_engine:install:assets</tt>
-  #
   # == Engine name
   #
   # There are some places where an Engine's name is used:
@@ -206,7 +180,7 @@ module Rails
   #   <tt>my_engine:install:assets</tt>
   #
   # Engine name is set by default based on class name. For <tt>MyEngine::Engine</tt> it will be
-  # <tt>my_engine_engine</tt>. You can change it manually it manually using the <tt>engine_name</tt> method:
+  # <tt>my_engine_engine</tt>. You can change it manually using the <tt>engine_name</tt> method:
   #
   #   module MyEngine
   #     class Engine < Rails::Engine
@@ -252,22 +226,22 @@ module Rails
   #   end
   #
   # The routes above will automatically point to <tt>MyEngine::ApplicationContoller</tt>. Furthermore, you don't
-  # need to use longer url helpers like <tt>my_engine_articles_path</tt>. Instead, you shuold simply use
+  # need to use longer url helpers like <tt>my_engine_articles_path</tt>. Instead, you should simply use
   # <tt>articles_path</tt> as you would do with your application.
   #
   # To make that behaviour consistent with other parts of the framework, an isolated engine also has influence on
   # <tt>ActiveModel::Naming</tt>. When you use a namespaced model, like <tt>MyEngine::Article</tt>, it will normally
-  # use the prefix "my_engine". In an isolated engine, the prefix will be ommited in url helpers and
+  # use the prefix "my_engine". In an isolated engine, the prefix will be omitted in url helpers and
   # form fields for convenience.
   #
-  #   polymorphic_url(MyEngine::Article.new) #=> "articles_path"
+  #   polymorphic_url(MyEngine::Article.new) # => "articles_path"
   #
   #   form_for(MyEngine::Article.new) do
-  #     text_field :title #=> <input type="text" name="article[title]" id="article_title" />
+  #     text_field :title # => <input type="text" name="article[title]" id="article_title" />
   #   end
   #
-  # Additionaly isolated engine will set its name according to namespace, so
-  # MyEngine::Engine.engine_name #=> "my_engine". It will also set MyEngine.table_name_prefix
+  # Additionally an isolated engine will set its name according to namespace, so
+  # MyEngine::Engine.engine_name will be "my_engine". It will also set MyEngine.table_name_prefix
   # to "my_engine_", changing MyEngine::Article model to use my_engine_article table.
   #
   # == Using Engine's routes outside Engine
@@ -276,7 +250,7 @@ module Rails
   # <tt>url_helpers</tt> inside +Application+. When you mount an engine in an application's routes, a special helper is
   # created to allow you to do that. Consider such a scenario:
   #
-  #   # APP/config/routes.rb
+  #   # config/routes.rb
   #   MyApplication::Application.routes.draw do
   #     mount MyEngine::Engine => "/my_engine", :as => "my_engine"
   #     match "/foo" => "foo#index"
@@ -311,6 +285,27 @@ module Rails
   #   form_for([my_engine, @user])
   #
   # This code will use <tt>my_engine.user_path(@user)</tt> to generate the proper route.
+  #
+  # == Isolated engine's helpers
+  #
+  # Sometimes you may want to isolate engine, but use helpers that are defined for it.
+  # If you want to share just a few specific helpers you can add them to application's
+  # helpers in ApplicationController:
+  #
+  # class ApplicationController < ActionController::Base
+  #   helper MyEngine::SharedEngineHelper
+  # end
+  #
+  # If you want to include all of the engine's helpers, you can use #helpers method on an engine's
+  # instance:
+  #
+  # class ApplicationController < ActionController::Base
+  #   helper MyEngine::Engine.helpers
+  # end
+  #
+  # It will include all of the helpers from engine's directory. Take into account that this does
+  # not include helpers defined in controllers with helper_method or other similar solutions,
+  # only helpers defined in the helpers directory will be included.
   #
   # == Migrations & seed data
   #
@@ -360,11 +355,11 @@ module Rails
       def isolate_namespace(mod)
         engine_name(generate_railtie_name(mod))
 
-        name = engine_name
-        self.routes.default_scope = {:module => name}
+        self.routes.default_scope = { :module => ActiveSupport::Inflector.underscore(mod.name) }
         self.isolated = true
 
         unless mod.respond_to?(:_railtie)
+          name = engine_name
           _railtie = self
           mod.singleton_class.instance_eval do
             define_method(:_railtie) do
@@ -382,14 +377,17 @@ module Rails
 
       # Finds engine with given path
       def find(path)
-        Rails::Engine::Railties.engines.find { |r| File.expand_path(r.root.to_s) == File.expand_path(path.to_s) }
+        expanded_path = File.expand_path path.to_s
+        Rails::Engine::Railties.engines.find { |engine|
+          File.expand_path(engine.root.to_s) == expanded_path
+        }
       end
     end
 
     delegate :middleware, :root, :paths, :to => :config
     delegate :engine_name, :isolated?, :to => "self.class"
 
-    def load_tasks
+    def load_tasks(*)
       super
       paths["lib/tasks"].existent.sort.each { |ext| load(ext) }
     end
@@ -405,6 +403,24 @@ module Rails
 
     def railties
       @railties ||= self.class::Railties.new(config)
+    end
+
+    def helpers
+      @helpers ||= begin
+        helpers = Module.new
+
+        helpers_paths = if config.respond_to?(:helpers_paths)
+          config.helpers_paths
+        else
+          paths["app/helpers"].existent
+        end
+
+        all = ActionController::Base.all_helpers_from_path(helpers_paths)
+        ActionController::Base.modules_for_helpers(all).each do |mod|
+          helpers.send(:include, mod)
+        end
+        helpers
+      end
     end
 
     def app
@@ -424,8 +440,7 @@ module Rails
 
     def env_config
       @env_config ||= {
-        'action_dispatch.routes' => routes,
-        'action_dispatch.asset_path' => config.asset_path
+        'action_dispatch.routes' => routes
       }
     end
 
@@ -506,12 +521,15 @@ module Rails
       require environment if environment
     end
 
-    initializer :append_asset_paths do
-      config.asset_path ||= default_asset_path
-
-      public_path = paths["public"].first
-      if config.compiled_asset_path && File.exist?(public_path)
-        config.static_asset_paths[config.compiled_asset_path] = public_path
+    initializer :append_assets_path do |app|
+      if app.config.assets.respond_to?(:prepend_path)
+        app.config.assets.prepend_path(*paths["vendor/assets"].existent)
+        app.config.assets.prepend_path(*paths["lib/assets"].existent)
+        app.config.assets.prepend_path(*paths["app/assets"].existent)
+      else
+        app.config.assets.paths.unshift(*paths["vendor/assets"].existent)
+        app.config.assets.paths.unshift(*paths["lib/assets"].existent)
+        app.config.assets.paths.unshift(*paths["app/assets"].existent)
       end
     end
 
@@ -534,27 +552,14 @@ module Rails
 
     rake_tasks do
       next if self.is_a?(Rails::Application)
+      next unless has_migrations?
 
       namespace railtie_name do
-        desc "Shortcut for running both rake #{railtie_name}:install:migrations and #{railtie_name}:install:assets"
-        task :install do
-          Rake::Task["#{railtie_name}:install:migrations"].invoke
-          Rake::Task["#{railtie_name}:install:assets"].invoke
-        end
-
         namespace :install do
-          # TODO Add assets copying to this list
-          # TODO Skip this if there is no paths["db/migrate"] for the engine
           desc "Copy migrations from #{railtie_name} to application"
           task :migrations do
             ENV["FROM"] = railtie_name
             Rake::Task["railties:install:migrations"].invoke
-          end
-
-          desc "Copy assets from #{railtie_name} to application"
-          task :assets do
-            ENV["FROM"] = railtie_name
-            Rake::Task["railties:install:assets"].invoke
           end
         end
       end
@@ -562,12 +567,12 @@ module Rails
 
   protected
 
-    def default_asset_path
-      "/#{railtie_name}%s"
-    end
-
     def routes?
       defined?(@routes)
+    end
+
+    def has_migrations?
+      paths["db/migrate"].first.present?
     end
 
     def find_root_with_flag(flag, default=nil)

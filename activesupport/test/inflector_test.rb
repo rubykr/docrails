@@ -51,21 +51,21 @@ class InflectorTest < Test::Unit::TestCase
   end
 
   SingularToPlural.each do |singular, plural|
-    define_method "test_pluralize_#{singular}" do
+    define_method "test_pluralize_singular_#{singular}" do
       assert_equal(plural, ActiveSupport::Inflector.pluralize(singular))
       assert_equal(plural.capitalize, ActiveSupport::Inflector.pluralize(singular.capitalize))
     end
   end
 
   SingularToPlural.each do |singular, plural|
-    define_method "test_singularize_#{plural}" do
+    define_method "test_singularize_plural_#{plural}" do
       assert_equal(singular, ActiveSupport::Inflector.singularize(plural))
       assert_equal(singular.capitalize, ActiveSupport::Inflector.singularize(plural.capitalize))
     end
   end
-  
+
   SingularToPlural.each do |singular, plural|
-    define_method "test_pluralize_#{plural}" do
+    define_method "test_pluralize_plural_#{plural}" do
       assert_equal(plural, ActiveSupport::Inflector.pluralize(plural))
       assert_equal(plural.capitalize, ActiveSupport::Inflector.pluralize(plural.capitalize))
     end
@@ -255,12 +255,21 @@ class InflectorTest < Test::Unit::TestCase
   end
 
   def test_clear_all
-    cached_values = ActiveSupport::Inflector.inflections.plurals, ActiveSupport::Inflector.inflections.singulars, ActiveSupport::Inflector.inflections.uncountables, ActiveSupport::Inflector.inflections.humans
-    ActiveSupport::Inflector.inflections.clear :all
-    assert ActiveSupport::Inflector.inflections.plurals.empty?
-    assert ActiveSupport::Inflector.inflections.singulars.empty?
-    assert ActiveSupport::Inflector.inflections.uncountables.empty?
-    assert ActiveSupport::Inflector.inflections.humans.empty?
+    cached_values = ActiveSupport::Inflector.inflections.plurals.dup, ActiveSupport::Inflector.inflections.singulars.dup, ActiveSupport::Inflector.inflections.uncountables.dup, ActiveSupport::Inflector.inflections.humans.dup
+    ActiveSupport::Inflector.inflections do |inflect|
+      # ensure any data is present
+      inflect.plural(/(quiz)$/i, '\1zes')
+      inflect.singular(/(database)s$/i, '\1')
+      inflect.uncountable('series')
+      inflect.human("col_rpted_bugs", "Reported bugs")
+
+      inflect.clear :all
+
+      assert inflect.plurals.empty?
+      assert inflect.singulars.empty?
+      assert inflect.uncountables.empty?
+      assert inflect.humans.empty?
+    end
     ActiveSupport::Inflector.inflections.instance_variable_set :@plurals, cached_values[0]
     ActiveSupport::Inflector.inflections.instance_variable_set :@singulars, cached_values[1]
     ActiveSupport::Inflector.inflections.instance_variable_set :@uncountables, cached_values[2]
@@ -268,12 +277,21 @@ class InflectorTest < Test::Unit::TestCase
   end
 
   def test_clear_with_default
-    cached_values = ActiveSupport::Inflector.inflections.plurals, ActiveSupport::Inflector.inflections.singulars, ActiveSupport::Inflector.inflections.uncountables, ActiveSupport::Inflector.inflections.humans
-    ActiveSupport::Inflector.inflections.clear
-    assert ActiveSupport::Inflector.inflections.plurals.empty?
-    assert ActiveSupport::Inflector.inflections.singulars.empty?
-    assert ActiveSupport::Inflector.inflections.uncountables.empty?
-    assert ActiveSupport::Inflector.inflections.humans.empty?
+    cached_values = ActiveSupport::Inflector.inflections.plurals.dup, ActiveSupport::Inflector.inflections.singulars.dup, ActiveSupport::Inflector.inflections.uncountables.dup, ActiveSupport::Inflector.inflections.humans.dup
+    ActiveSupport::Inflector.inflections do |inflect|
+      # ensure any data is present
+      inflect.plural(/(quiz)$/i, '\1zes')
+      inflect.singular(/(database)s$/i, '\1')
+      inflect.uncountable('series')
+      inflect.human("col_rpted_bugs", "Reported bugs")
+
+      inflect.clear
+
+      assert inflect.plurals.empty?
+      assert inflect.singulars.empty?
+      assert inflect.uncountables.empty?
+      assert inflect.humans.empty?
+    end
     ActiveSupport::Inflector.inflections.instance_variable_set :@plurals, cached_values[0]
     ActiveSupport::Inflector.inflections.instance_variable_set :@singulars, cached_values[1]
     ActiveSupport::Inflector.inflections.instance_variable_set :@uncountables, cached_values[2]

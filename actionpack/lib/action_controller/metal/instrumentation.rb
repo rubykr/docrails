@@ -14,12 +14,12 @@ module ActionController
 
     attr_internal :view_runtime
 
-    def process_action(action, *args)
+    def process_action(*args)
       raw_payload = {
         :controller => self.class.name,
         :action     => self.action_name,
         :params     => request.filtered_parameters,
-        :formats    => request.formats.map(&:to_sym),
+        :format     => request.format.ref,
         :method     => request.method,
         :path       => (request.fullpath rescue "unknown")
       }
@@ -78,7 +78,7 @@ module ActionController
       yield
     end
 
-    # Everytime after an action is processed, this method is invoked
+    # Every time after an action is processed, this method is invoked
     # with the payload, so you can add more information.
     # :api: plugin
     def append_info_to_payload(payload) #:nodoc:

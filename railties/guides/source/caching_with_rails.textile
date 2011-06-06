@@ -25,7 +25,7 @@ h4. Page Caching
 
 Page caching is a Rails mechanism which allows the request for a generated page to be fulfilled by the webserver (i.e. apache or nginx), without ever having to go through the Rails stack at all. Obviously, this is super-fast. Unfortunately, it can't be applied to every situation (such as pages that need authentication) and since the webserver is literally just serving a file from the filesystem, cache expiration is an issue that needs to be dealt with.
 
-So, how do you enable this super-fast cache behavior?  Simple, let's say you have a controller called +ProductsController+ and an +index+ action that lists all the products
+So, how do you enable this super-fast cache behavior? Simple, let's say you have a controller called +ProductsController+ and an +index+ action that lists all the products
 
 <ruby>
 class ProductsController < ActionController
@@ -65,7 +65,7 @@ end
 
 If you want a more complicated expiration scheme, you can use cache sweepers to expire cached objects when things change. This is covered in the section on Sweepers.
 
-Note: Page caching ignores all parameters. For example +/products?page=1+ will be written out to the filesystem as +products.html+ with no reference to the +page+ parameter. Thus, if someone requests +/products?page=2+ later, they will get the cached first page. Be careful when page caching GET parameters in the URL!
+NOTE: Page caching ignores all parameters. For example +/products?page=1+ will be written out to the filesystem as +products.html+ with no reference to the +page+ parameter. Thus, if someone requests +/products?page=2+ later, they will get the cached first page. Be careful when page caching GET parameters in the URL!
 
 INFO: Page caching runs in an after filter. Thus, invalid requests won't generate spurious cache entries as long as you halt them. Typically, a redirection in some before filter that checks request preconditions does the job.
 
@@ -98,7 +98,7 @@ You can also use +:if+ (or +:unless+) to pass a Proc that specifies when the act
 
 You can modify the default action cache path by passing a +:cache_path+ option. This will be passed directly to +ActionCachePath.path_for+. This is handy for actions with multiple possible routes that should be cached differently. If a block is given, it is called with the current controller instance.
 
-Finally, if you are using memcached, you can also pass +:expires_in+. In fact, all parameters not used by +caches_action+ are sent to the underlying cache store.
+Finally, if you are using memcached or Ehcache, you can also pass +:expires_in+. In fact, all parameters not used by +caches_action+ are sent to the underlying cache store.
 
 INFO: Action caching runs in an after filter. Thus, invalid requests won't generate spurious cache entries as long as you halt them. Typically, a redirection in some before filter that checks request preconditions does the job.
 
@@ -152,7 +152,7 @@ expire_fragment('all_available_products')
 
 h4. Sweepers
 
-Cache sweeping is a mechanism which allows you to get around having a ton of +expire_{page,action,fragment}+ calls in your code.  It does this by moving all the work required to expire cached content into an +ActionController::Caching::Sweeper+ subclass.  This class is an observer and looks for changes to an object via callbacks, and when a change occurs it expires the caches associated with that object in an around or after filter.
+Cache sweeping is a mechanism which allows you to get around having a ton of +expire_{page,action,fragment}+ calls in your code. It does this by moving all the work required to expire cached content into an +ActionController::Caching::Sweeper+ subclass. This class is an observer and looks for changes to an object via callbacks, and when a change occurs it expires the caches associated with that object in an around or after filter.
 
 Continuing with our Product controller example, we could rewrite it with a sweeper like this:
 
@@ -230,9 +230,9 @@ class ProductsController < ActionController
 end
 </ruby>
 
-The second time the same query is run against the database, it's not actually going to hit the database.  The first time the result is returned from the query it is stored in the query cache (in memory) and the second time it's pulled from memory.
+The second time the same query is run against the database, it's not actually going to hit the database. The first time the result is returned from the query it is stored in the query cache (in memory) and the second time it's pulled from memory.
 
-However, it's important to note that query caches are created at the start of an action and destroyed at the end of that action and thus persist only for the duration of the action.  If you'd like to store query results in a more persistent fashion, you can in Rails by using low level caching.
+However, it's important to note that query caches are created at the start of an action and destroyed at the end of that action and thus persist only for the duration of the action. If you'd like to store query results in a more persistent fashion, you can in Rails by using low level caching.
 
 h3. Cache Stores
 
@@ -304,6 +304,35 @@ The +write+ and +fetch+ methods on this cache accept two additional options that
 ActionController::Base.cache_store = :mem_cache_store, "cache-1.example.com", "cache-2.example.com"
 </ruby>
 
+h4. ActiveSupport::Cache::EhcacheStore
+
+If you are using JRuby you can use Terracotta's Ehcache as the cache store for your application. Ehcache is an open source Java cache that also offers an enterprise version with increased scalability, management, and commercial support. You must first install the jruby-ehcache-rails3 gem (version 1.1.0 or later) to use this cache store.
+
+<ruby>
+ActionController::Base.cache_store = :ehcache_store
+</ruby>
+
+When initializing the cache, you may use the +:ehcache_config+ option to specify the Ehcache config file to use (where the default is "ehcache.xml" in your Rails config directory), and the :cache_name option to provide a custom name for your cache (the default is rails_cache).
+
+In addition to the standard +:expires_in+ option, the +write+ method on this cache can also accept the additional  +:unless_exist+ option, which will cause the cache store to use Ehcache's +putIfAbsent+ method instead of +put+, and therefore will not overwrite an existing entry. Additionally, the +write+ method supports all of the properties exposed by the "Ehcache Element class":http://ehcache.org/apidocs/net/sf/ehcache/Element.html , including:
+
+|_. Property |_. Argument Type |_. Description |
+| elementEvictionData | ElementEvictionData | Sets this element's eviction data instance. |
+| eternal | boolean | Sets whether the element is eternal. |
+| timeToIdle, tti | int | Sets time to idle |
+| timeToLive, ttl, expires_in | int | Sets time to Live |
+| version | long | Sets the version attribute of the ElementAttributes object. |
+
+These options are passed to the +write+ method as Hash options using either camelCase or underscore notation, as in the following examples:
+
+<ruby>
+Rails.cache.write('key', 'value', :time_to_idle => 60.seconds, :timeToLive => 600.seconds)
+caches_action :index, :expires_in => 60.seconds, :unless_exist => true
+</ruby>
+
+For more information about Ehcache, see "http://ehcache.org/":http://ehcache.org/ .
+For more information about Ehcache for JRuby and Rails, see "http://ehcache.org/documentation/jruby.html":http://ehcache.org/documentation/jruby.html
+
 h4. Custom Cache Stores
 
 You can create your own custom cache store by simply extending +ActiveSupport::Cache::Store+ and implementing the appropriate methods. In this way, you can swap in any number of caching technologies into your Rails application.
@@ -316,13 +345,13 @@ ActionController::Base.cache_store = MyCacheStore.new
 
 h4. Cache Keys
 
-The keys used in a cache can be any object that responds to either +:cache_key+ or to +:to_param+. You can implement the +:cache_key+ method on your classes if you need to generate custom keys. ActiveRecord will generate keys based on the class name and record id.
+The keys used in a cache can be any object that responds to either +:cache_key+ or to +:to_param+. You can implement the +:cache_key+ method on your classes if you need to generate custom keys. Active Record will generate keys based on the class name and record id.
 
 You can use Hashes and Arrays of values as cache keys.
 
 <ruby>
 # This is a legal cache key
-Rails.cache.read(:site => "mysite", :owners => [owner_1, owner2])
+Rails.cache.read(:site => "mysite", :owners => [owner_1, owner_2])
 </ruby>
 
 The keys you use on +Rails.cache+ will not be the same as those actually used with the storage engine. They may be modified with a namespace or altered to fit technology backend constraints. This means, for instance, that you can't save values with +Rails.cache+ and then try to pull them out with the +memcache-client+ gem. However, you also don't need to worry about exceeding the memcached size limit or violating syntax rules.
@@ -352,7 +381,7 @@ class ProductsController < ApplicationController
     # If the request is fresh (i.e. it's not modified) then you don't need to do
     # anything. The default render checks for this using the parameters
     # used in the previous call to stale? and will automatically send a
-    # :not_modified.  So that's it, you're done.
+    # :not_modified. So that's it, you're done.
 end
 </ruby>
 

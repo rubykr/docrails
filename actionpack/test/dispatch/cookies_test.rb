@@ -121,7 +121,21 @@ class CookiesTest < ActionController::TestCase
     end
 
     def string_key
-      cookies['user_name'] = "david"
+      cookies['user_name'] = "dhh"
+      head :ok
+    end
+
+    def symbol_key_mock
+      cookies[:user_name] = "david" if cookies[:user_name] == "andrew"
+      head :ok
+    end
+
+    def string_key_mock
+      cookies['user_name'] = "david" if cookies['user_name'] == "andrew"
+      head :ok
+    end
+
+    def noop
       head :ok
     end
   end
@@ -403,12 +417,67 @@ class CookiesTest < ActionController::TestCase
     assert_cookie_header "user_name=; path=/; expires=Thu, 01-Jan-1970 00:00:00 GMT"
   end
 
+  
   def test_cookies_hash_is_indifferent_access
-    [:symbol_key, :string_key].each do |cookie_key|
-      get cookie_key
+      get :symbol_key
       assert_equal "david", cookies[:user_name]
       assert_equal "david", cookies['user_name']
-    end
+      get :string_key
+      assert_equal "dhh", cookies[:user_name]
+      assert_equal "dhh", cookies['user_name']
+  end
+
+
+
+  def test_setting_request_cookies_is_indifferent_access
+    @request.cookies.clear
+    @request.cookies[:user_name] = "andrew"
+    get :string_key_mock
+    assert_equal "david", cookies[:user_name]
+
+    @request.cookies.clear
+    @request.cookies['user_name'] = "andrew"
+    get :symbol_key_mock
+    assert_equal "david", cookies['user_name']
+  end
+
+  def test_cookies_retained_across_requests
+    get :symbol_key
+    assert_equal "user_name=david; path=/", @response.headers["Set-Cookie"]
+    assert_equal "david", cookies[:user_name]
+
+    get :noop
+    assert_nil @response.headers["Set-Cookie"]
+    assert_equal "user_name=david", @request.env['HTTP_COOKIE']
+    assert_equal "david", cookies[:user_name]
+
+    get :noop
+    assert_nil @response.headers["Set-Cookie"]
+    assert_equal "user_name=david", @request.env['HTTP_COOKIE']
+    assert_equal "david", cookies[:user_name]
+  end
+
+  def test_cookies_can_be_cleared
+    get :symbol_key
+    assert_equal "user_name=david; path=/", @response.headers["Set-Cookie"]
+    assert_equal "david", cookies[:user_name]
+
+    @request.cookies.clear
+    get :noop
+    assert_nil @response.headers["Set-Cookie"]
+    assert_nil @request.env['HTTP_COOKIE']
+    assert_nil cookies[:user_name]
+
+    get :symbol_key
+    assert_equal "user_name=david; path=/", @response.headers["Set-Cookie"]
+    assert_equal "david", cookies[:user_name]
+  end
+
+  def test_cookies_are_escaped
+    @request.cookies[:user_ids] = '1;2'
+    get :noop
+    assert_equal "user_ids=1%3B2", @request.env['HTTP_COOKIE']
+    assert_equal "1;2", cookies[:user_ids]
   end
 
   private
@@ -429,4 +498,100 @@ class CookiesTest < ActionController::TestCase
         assert_not_equal expected.split("\n"), header
       end
     end
+end
+
+class CookiesIntegrationTest < ActionDispatch::IntegrationTest
+  SessionKey = '_myapp_session'
+  SessionSecret = 'b3c631c314c0bbca50c1b2843150fe33'
+
+  class TestController < ActionController::Base
+    def dont_set_cookies
+      head :ok
+    end
+
+    def set_cookies
+      cookies["that"] = "hello"
+      head :ok
+    end
+  end
+
+  def test_setting_cookies_raises_after_stream_back_to_client
+    with_test_route_set do
+      get '/set_cookies'
+      assert_raise(ActionDispatch::ClosedError) {
+        request.cookie_jar['alert'] = 'alert'
+        cookies['alert'] = 'alert'
+      }
+    end
+  end
+
+  def test_setting_cookies_raises_after_stream_back_to_client_even_without_cookies
+    with_test_route_set do
+      get '/dont_set_cookies'
+      assert_raise(ActionDispatch::ClosedError) {
+        request.cookie_jar['alert'] = 'alert'
+      }
+    end
+  end
+
+  def test_setting_permanent_cookies_raises_after_stream_back_to_client
+    with_test_route_set do
+      get '/set_cookies'
+      assert_raise(ActionDispatch::ClosedError) {
+        request.cookie_jar.permanent['alert'] = 'alert'
+        cookies['alert'] = 'alert'
+      }
+    end
+  end
+
+  def test_setting_permanent_cookies_raises_after_stream_back_to_client_even_without_cookies
+    with_test_route_set do
+      get '/dont_set_cookies'
+      assert_raise(ActionDispatch::ClosedError) {
+        request.cookie_jar.permanent['alert'] = 'alert'
+      }
+    end
+  end
+
+  def test_setting_signed_cookies_raises_after_stream_back_to_client
+    with_test_route_set do
+      get '/set_cookies'
+      assert_raise(ActionDispatch::ClosedError) {
+        request.cookie_jar.signed['alert'] = 'alert'
+        cookies['alert'] = 'alert'
+      }
+    end
+  end
+
+  def test_setting_signed_cookies_raises_after_stream_back_to_client_even_without_cookies
+    with_test_route_set do
+      get '/dont_set_cookies'
+      assert_raise(ActionDispatch::ClosedError) {
+        request.cookie_jar.signed['alert'] = 'alert'
+      }
+    end
+  end
+
+  private
+
+  # Overwrite get to send SessionSecret in env hash
+  def get(path, parameters = nil, env = {})
+    env["action_dispatch.secret_token"] ||= SessionSecret
+    super
+  end
+
+  def with_test_route_set
+    with_routing do |set|
+      set.draw do
+        match ':action', :to => CookiesIntegrationTest::TestController
+      end
+
+      @app = self.class.build_app(set) do |middleware|
+        middleware.use ActionDispatch::Cookies
+        middleware.delete "ActionDispatch::ShowExceptions"
+      end
+
+      yield
+    end
+  end
 end

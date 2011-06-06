@@ -2,6 +2,7 @@ require 'active_support/core_ext/object/to_json'
 require 'active_support/core_ext/module/delegation'
 require 'active_support/deprecation'
 require 'active_support/json/variable'
+require 'active_support/ordered_hash'
 
 require 'bigdecimal'
 require 'active_support/core_ext/big_decimal/conversions' # for #to_s
@@ -13,6 +14,7 @@ require 'time'
 require 'active_support/core_ext/time/conversions'
 require 'active_support/core_ext/date_time/conversions'
 require 'active_support/core_ext/date/conversions'
+require 'set'
 
 module ActiveSupport
   class << self
@@ -38,7 +40,7 @@ module ActiveSupport
 
         def initialize(options = nil)
           @options = options
-          @seen = []
+          @seen = Set.new
         end
 
         def encode(value, use_options = true)
@@ -70,13 +72,12 @@ module ActiveSupport
 
         private
           def check_for_circular_references(value)
-            if @seen.any? { |object| object.equal?(value) }
+            unless @seen.add?(value.__id__)
               raise CircularReferenceError, 'object references itself'
             end
-            @seen.unshift value
             yield
           ensure
-            @seen.shift
+            @seen.delete(value.__id__)
           end
       end
 
@@ -205,7 +206,9 @@ class Regexp
 end
 
 module Enumerable
-  def as_json(options = nil) to_a end #:nodoc:
+  def as_json(options = nil) #:nodoc:
+    to_a.as_json(options)
+  end
 end
 
 class Array

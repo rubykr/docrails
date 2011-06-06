@@ -74,43 +74,53 @@ module ActionView
       # ==== Options
       # * <tt>:multiple</tt> - If set to true the selection will allow multiple choices.
       # * <tt>:disabled</tt> - If set to true, the user will not be able to use this input.
+      # * <tt>:include_blank</tt> - If set to true, an empty option will be create
+      # * <tt>:prompt</tt> - Create a prompt option with blank value and the text asking user to select something
       # * Any other key creates standard HTML attributes for the tag.
       #
       # ==== Examples
       #   select_tag "people", options_from_collection_for_select(@people, "id", "name")
       #   # <select id="people" name="people"><option value="1">David</option></select>
       #
-      #   select_tag "people", "<option>David</option>"
+      #   select_tag "people", "<option>David</option>".html_safe
       #   # => <select id="people" name="people"><option>David</option></select>
       #
-      #   select_tag "count", "<option>1</option><option>2</option><option>3</option><option>4</option>"
+      #   select_tag "count", "<option>1</option><option>2</option><option>3</option><option>4</option>".html_safe
       #   # => <select id="count" name="count"><option>1</option><option>2</option>
       #   #    <option>3</option><option>4</option></select>
       #
-      #   select_tag "colors", "<option>Red</option><option>Green</option><option>Blue</option>", :multiple => true
+      #   select_tag "colors", "<option>Red</option><option>Green</option><option>Blue</option>".html_safe, :multiple => true
       #   # => <select id="colors" multiple="multiple" name="colors[]"><option>Red</option>
       #   #    <option>Green</option><option>Blue</option></select>
       #
-      #   select_tag "locations", "<option>Home</option><option selected="selected">Work</option><option>Out</option>"
+      #   select_tag "locations", "<option>Home</option><option selected="selected">Work</option><option>Out</option>".html_safe
       #   # => <select id="locations" name="locations"><option>Home</option><option selected='selected'>Work</option>
       #   #    <option>Out</option></select>
       #
-      #   select_tag "access", "<option>Read</option><option>Write</option>", :multiple => true, :class => 'form_input'
+      #   select_tag "access", "<option>Read</option><option>Write</option>".html_safe, :multiple => true, :class => 'form_input'
       #   # => <select class="form_input" id="access" multiple="multiple" name="access[]"><option>Read</option>
       #   #    <option>Write</option></select>
       #
-      #   select_tag "destination", "<option>NYC</option><option>Paris</option><option>Rome</option>", :disabled => true
+      #   select_tag "people", options_from_collection_for_select(@people, "id", "name"), :include_blank => true
+      #   # => <select id="people" name="people"><option value=""></option><option value="1">David</option></select>
+      #
+      #   select_tag "people", options_from_collection_for_select(@people, "id", "name"), :prompt => "Select something"
+      #   # => <select id="people" name="people"><option value="">Select something</option><option value="1">David</option></select>
+      #
+      #   select_tag "destination", "<option>NYC</option><option>Paris</option><option>Rome</option>".html_safe, :disabled => true
       #   # => <select disabled="disabled" id="destination" name="destination"><option>NYC</option>
       #   #    <option>Paris</option><option>Rome</option></select>
       def select_tag(name, option_tags = nil, options = {})
         html_name = (options[:multiple] == true && !name.to_s.ends_with?("[]")) ? "#{name}[]" : name
-        if blank = options.delete(:include_blank)
-          if blank.kind_of?(String)
-            option_tags = "<option value=\"\">#{blank}</option>".html_safe + option_tags
-          else
-            option_tags = "<option value=\"\"></option>".html_safe + option_tags
-          end
+
+        if options.delete(:include_blank)
+          option_tags = "<option value=\"\"></option>".html_safe + option_tags
         end
+
+        if prompt = options.delete(:prompt)
+          option_tags = "<option value=\"\">#{prompt}</option>".html_safe + option_tags
+        end
+
         content_tag :select, option_tags, { "name" => html_name, "id" => sanitize_to_id(name) }.update(options.stringify_keys)
       end
 
@@ -194,7 +204,7 @@ module ActionView
         text_field_tag(name, value, options.stringify_keys.update("type" => "hidden"))
       end
 
-      # Creates a file upload field.  If you are using file uploads then you will also need
+      # Creates a file upload field. If you are using file uploads then you will also need
       # to set the multipart option for the form tag:
       #
       #   <%= form_tag '/upload', :multipart => true do %>
@@ -592,7 +602,7 @@ module ActionView
           options.stringify_keys.tap do |html_options|
             html_options["enctype"] = "multipart/form-data" if html_options.delete("multipart")
             # The following URL is unescaped, this is just a hash of options, and it is the
-            # responsability of the caller to escape all the values.
+            # responsibility of the caller to escape all the values.
             html_options["action"]  = url_for(url_for_options, *parameters_for_url)
             html_options["accept-charset"] = "UTF-8"
             html_options["data-remote"] = true if html_options.delete("remote")

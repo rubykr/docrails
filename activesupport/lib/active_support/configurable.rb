@@ -2,6 +2,7 @@ require 'active_support/concern'
 require 'active_support/ordered_options'
 require 'active_support/core_ext/kernel/singleton_class'
 require 'active_support/core_ext/module/delegation'
+require 'active_support/core_ext/array/extract_options'
 
 module ActiveSupport
   # Configurable provides a <tt>config</tt> method to store and retrieve
@@ -26,7 +27,7 @@ module ActiveSupport
 
     module ClassMethods
       def config
-        @_config ||= if superclass.respond_to?(:config)
+        @_config ||= if respond_to?(:superclass) && superclass.respond_to?(:config)
           superclass.config.inheritable_copy
         else
           # create a new "anonymous" class that will host the compiled reader methods
@@ -51,34 +52,36 @@ module ActiveSupport
       #   user.allowed_access # => true
       #
       def config_accessor(*names)
-        names.each do |name|
-          code, line = <<-RUBY, __LINE__ + 1
-            def #{name}; config.#{name}; end
-            def #{name}=(value); config.#{name} = value; end
-          RUBY
+        options = names.extract_options!
 
-          singleton_class.class_eval code, __FILE__, line
-          class_eval code, __FILE__, line
+        names.each do |name|
+          reader, line = "def #{name}; config.#{name}; end", __LINE__
+          writer, line = "def #{name}=(value); config.#{name} = value; end", __LINE__
+
+          singleton_class.class_eval reader, __FILE__, line
+          singleton_class.class_eval writer, __FILE__, line
+          class_eval reader, __FILE__, line unless options[:instance_reader] == false
+          class_eval writer, __FILE__, line unless options[:instance_writer] == false
         end
       end
     end
 
     # Reads and writes attributes from a configuration <tt>OrderedHash</tt>.
-    # 
-    #   require 'active_support/configurable'      
-    #  
+    #
+    #   require 'active_support/configurable'
+    #
     #   class User
     #     include ActiveSupport::Configurable
-    #   end 
+    #   end
     #
     #   user = User.new
-    # 
+    #
     #   user.config.allowed_access = true
     #   user.config.level = 1
     #
     #   user.config.allowed_access # => true
     #   user.config.level          # => 1
-    # 
+    #
     def config
       @_config ||= self.class.config.inheritable_copy
     end

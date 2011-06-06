@@ -113,7 +113,7 @@ module ActiveRecord
         end
       end
 
-      # A cached lookup for table existence
+      # A cached lookup for table existence.
       def table_exists?(name)
         return true if @tables.key? name
 
@@ -135,7 +135,7 @@ module ActiveRecord
         @tables.clear
       end
 
-      # Clear out internal caches for table with +table_name+
+      # Clear out internal caches for table with +table_name+.
       def clear_table_cache!(table_name)
         @columns.delete table_name
         @columns_hash.delete table_name
@@ -151,6 +151,12 @@ module ActiveRecord
         @reserved_connections[current_connection_id] ||= checkout
       end
 
+      # Check to see if there is an active connection in this connection
+      # pool.
+      def active_connection?
+        @reserved_connections.key? current_connection_id
+      end
+
       # Signal that the thread is finished with the current connection.
       # #release_connection releases the connection-thread association
       # and returns the connection to the pool.
@@ -159,7 +165,7 @@ module ActiveRecord
         checkin conn if conn
       end
 
-      # If a connection already exists yield it to the block.  If no connection
+      # If a connection already exists yield it to the block. If no connection
       # exists checkout a connection, yield it to the block, and checkin the
       # connection when finished.
       def with_connection
@@ -187,7 +193,7 @@ module ActiveRecord
         @connections = []
       end
 
-      # Clears the cache which maps classes
+      # Clears the cache which maps classes.
       def clear_reloadable_connections!
         @reserved_connections.each do |name, conn|
           checkin conn
@@ -256,7 +262,7 @@ module ActiveRecord
             else
               clear_stale_cached_connections!
               if @size == @checked_out.size
-                raise ConnectionTimeoutError, "could not obtain a database connection#{" within #{@timeout} seconds" if @timeout}.  The max pool size is currently #{@size}; consider increasing it."
+                raise ConnectionTimeoutError, "could not obtain a database connection#{" within #{@timeout} seconds" if @timeout}. The max pool size is currently #{@size}; consider increasing it."
               end
             end
 
@@ -346,6 +352,12 @@ module ActiveRecord
         @connection_pools[name] = ConnectionAdapters::ConnectionPool.new(spec)
       end
 
+      # Returns true if there are any active connections among the connection
+      # pools that the ConnectionHandler is managing.
+      def active_connections?
+        connection_pools.values.any? { |pool| pool.active_connection? }
+      end
+
       # Returns any connections in use by the current thread back to the pool,
       # and also returns connections to the pool cached by threads that are no
       # longer alive.
@@ -353,7 +365,7 @@ module ActiveRecord
         @connection_pools.each_value {|pool| pool.release_connection }
       end
 
-      # Clears the cache which maps classes
+      # Clears the cache which maps classes.
       def clear_reloadable_connections!
         @connection_pools.each_value {|pool| pool.clear_reloadable_connections! }
       end
@@ -405,18 +417,40 @@ module ActiveRecord
     end
 
     class ConnectionManagement
+      class Proxy # :nodoc:
+        attr_reader :body, :testing
+
+        def initialize(body, testing = false)
+          @body    = body
+          @testing = testing
+        end
+
+        def each(&block)
+          body.each(&block)
+        end
+
+        def close
+          body.close if body.respond_to?(:close)
+
+          # Don't return connection (and perform implicit rollback) if
+          # this request is a part of integration test
+          ActiveRecord::Base.clear_active_connections! unless testing
+        end
+      end
+
       def initialize(app)
         @app = app
       end
 
       def call(env)
-        @app.call(env)
-      ensure
-        # Don't return connection (and perform implicit rollback) if
-        # this request is a part of integration test
-        unless env.key?("rack.test")
-          ActiveRecord::Base.clear_active_connections!
-        end
+        testing = env.key?('rack.test')
+
+        status, headers, body = @app.call(env)
+
+        [status, headers, Proxy.new(body, testing)]
+      rescue
+        ActiveRecord::Base.clear_active_connections! unless testing
+        raise
       end
     end
   end

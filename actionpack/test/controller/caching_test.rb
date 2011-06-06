@@ -187,6 +187,9 @@ class ActionCachingTestController < CachingController
     rescue_from(ActiveRecord::RecordNotFound) { head :not_found }
   end
 
+  # Eliminate uninitialized ivar warning
+  before_filter { @title = nil }
+
   caches_action :index, :redirected, :forbidden, :if => Proc.new { |c| !c.request.format.json? }, :expires_in => 1.hour
   caches_action :show, :cache_path => 'http://test.host/custom/show'
   caches_action :edit, :cache_path => Proc.new { |c| c.params[:id] ? "http://test.host/#{c.params[:id]};edit" : "http://test.host/edit" }
@@ -559,6 +562,11 @@ class ActionCacheTest < ActionController::TestCase
     assert_response 404
   end
 
+  def test_four_oh_four_renders_content
+    get :four_oh_four
+    assert_equal "404'd!", @response.body
+  end
+
   def test_simple_runtime_error_returns_500_for_multiple_requests
     get :simple_runtime_error
     assert_response 500
@@ -708,17 +716,10 @@ class FunctionalCachingController < CachingController
     end
   end
 
-  def js_fragment_cached_with_partial
-    respond_to do |format|
-      format.js
-    end
-  end
-
   def formatted_fragment_cached
     respond_to do |format|
       format.html
       format.xml
-      format.js
     end
   end
 
@@ -763,13 +764,6 @@ CACHED
     assert_match(/Some inline content/, @response.body)
     assert_match(/Some cached content/, @response.body)
     assert_match("Some cached content", @store.read('views/test.host/functional_caching/inline_fragment_cached'))
-  end
-
-  def test_fragment_caching_in_rjs_partials
-    xhr :get, :js_fragment_cached_with_partial
-    assert_response :success
-    assert_match(/Old fragment caching in a partial/, @response.body)
-    assert_match("Old fragment caching in a partial", @store.read('views/test.host/functional_caching/js_fragment_cached_with_partial'))
   end
 
   def test_html_formatted_fragment_caching

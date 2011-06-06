@@ -96,26 +96,6 @@ Will be rendered as follows:
 Title: Rails debugging guide
 </pre>
 
-h4. Debugging RJS
-
-Rails has optional built-in support to debug RJS. When enabled, responses are wrapped in a try/catch block that displays the caught exception using +alert()+, and then re-raises it.
-
-The flag to enable RJS debugging in your configuration files is +config.action_view.debug_rjs+:
-
-<ruby>
-config.action_view.debug_rjs = true
-</ruby>
-
-or at any time setting +ActionView::Base.debug_rjs+:
-
-<ruby>
-ActionView::Base.debug_rjs = true
-</ruby>
-
-It is enabled by default in development mode, and disabled in the rest.
-
-TIP: For more information on debugging JavaScript, refer to "Firebug":http://getfirebug.com/, the popular debugger for Firefox.
-
 h3. The Logger
 
 It can also be useful to save information to log files at runtime. Rails maintains a separate log file for each runtime environment.
@@ -251,7 +231,7 @@ If you see the message in the console or logs:
 Make sure you have started your web server with the option +--debugger+:
 
 <shell>
-~/PathTo/rails_project$ rails server --debugger
+$ rails server --debugger
 => Booting WEBrick
 => Rails 3.0.0 application starting on http://0.0.0.0:3000
 => Debugger enabled
@@ -299,14 +279,14 @@ This command shows you where you are in the code by printing 10 lines centered a
 [1, 10] in /PathToProject/posts_controller.rb
    1  class PostsController < ApplicationController
    2    # GET /posts
-   3    # GET /posts.xml
+   3    # GET /posts.json
    4    def index
    5      debugger
 => 6      @posts = Post.all
    7
    8      respond_to do |format|
    9        format.html # index.html.erb
-   10        format.xml  { render :xml => @posts }
+   10        format.json { render :json => @posts }
 </shell>
 
 If you repeat the +list+ command, this time using just +l+, the next ten lines of the file will be printed out.
@@ -318,7 +298,7 @@ If you repeat the +list+ command, this time using just +l+, the next ten lines o
    12    end
    13
    14    # GET /posts/1
-   15    # GET /posts/1.xml
+   15    # GET /posts/1.json
    16    def show
    17      @post = Post.find(params[:id])
    18
@@ -327,6 +307,41 @@ If you repeat the +list+ command, this time using just +l+, the next ten lines o
 </shell>
 
 And so on until the end of the current file. When the end of file is reached, the +list+ command will start again from the beginning of the file and continue again up to the end, treating the file as a circular buffer.
+
+On the other hand, to see the previous ten lines you should type +list-+ (or +l-+)
+
+<shell>
+(rdb:7) l-
+[1, 10] in /PathToProject/posts_controller.rb
+   1  class PostsController < ApplicationController
+   2    # GET /posts
+   3    # GET /posts.json
+   4    def index
+   5      debugger
+   6      @posts = Post.all
+   7
+   8      respond_to do |format|
+   9        format.html # index.html.erb
+   10        format.json { render :json => @posts }
+</shell>
+
+This way you can move inside the file, being able to see the code above and over the line you added the +debugger+.
+Finally, to see where you are in the code again you can type +list=+
+
+<shell>
+(rdb:7) list=
+[1, 10] in /PathToProject/posts_controller.rb
+   1  class PostsController < ApplicationController
+   2    # GET /posts
+   3    # GET /posts.json
+   4    def index
+   5      debugger
+=> 6      @posts = Post.all
+   7
+   8      respond_to do |format|
+   9        format.html # index.html.erb
+   10        format.json { render :json => @posts }
+</shell>
 
 h4. The Context
 
@@ -477,7 +492,7 @@ end
 TIP: You can use ruby-debug while using +rails console+. Just remember to +require "ruby-debug"+ before calling the +debugger+ method.
 
 <shell>
-/PathTo/project $ rails console
+$ rails console
 Loading development environment (Rails 2.1.0)
 >> require "ruby-debug"
 => []
@@ -619,14 +634,14 @@ In this section, you will learn how to find and fix such leaks by using tools su
 
 h4. BleakHouse
 
-"BleakHouse":http://github.com/fauna/bleak_house/tree/master is a library for finding memory leaks.
+"BleakHouse":https://github.com/fauna/bleak_house/tree/master is a library for finding memory leaks.
 
 If a Ruby object does not go out of scope, the Ruby Garbage Collector won't sweep it since it is referenced somewhere. Leaks like this can grow slowly and your application will consume more and more memory, gradually affecting the overall system performance. This tool will help you find leaks on the Ruby heap.
 
 To install it run:
 
 <shell>
-sudo gem install bleak_house
+$ sudo gem install bleak_house
 </shell>
 
 Then setup your application for profiling. Then add the following at the bottom of config/environment.rb:
@@ -638,7 +653,7 @@ require 'bleak_house' if ENV['BLEAK_HOUSE']
 Start a server instance with BleakHouse integration:
 
 <shell>
-RAILS_ENV=production BLEAK_HOUSE=1 ruby-bleak-house rails server
+$ RAILS_ENV=production BLEAK_HOUSE=1 ruby-bleak-house rails server
 </shell>
 
 Make sure to run a couple hundred requests to get better data samples, then press +CTRL-C+. The server will stop and Bleak House will produce a dumpfile in +/tmp+:
@@ -668,7 +683,7 @@ To analyze it, just run the listed command. The top 20 leakiest lines will be li
 
 This way you can find where your application is leaking memory and fix it.
 
-If "BleakHouse":http://github.com/fauna/bleak_house/tree/master doesn't report any heap growth but you still have memory growth, you might have a broken C extension, or real leak in the interpreter. In that case, try using Valgrind to investigate further.
+If "BleakHouse":https://github.com/fauna/bleak_house/tree/master doesn't report any heap growth but you still have memory growth, you might have a broken C extension, or real leak in the interpreter. In that case, try using Valgrind to investigate further.
 
 h4. Valgrind
 
@@ -682,12 +697,12 @@ h3. Plugins for Debugging
 
 There are some Rails plugins to help you to find errors and debug your application. Here is a list of useful plugins for debugging:
 
-* "Footnotes":http://github.com/josevalim/rails-footnotes: Every Rails page has footnotes that give request information and link back to your source via TextMate.
-* "Query Trace":http://github.com/ntalbott/query_trace/tree/master: Adds query origin tracing to your logs.
-* "Query Stats":http://github.com/dan-manges/query_stats/tree/master: A Rails plugin to track database queries.
+* "Footnotes":https://github.com/josevalim/rails-footnotes: Every Rails page has footnotes that give request information and link back to your source via TextMate.
+* "Query Trace":https://github.com/ntalbott/query_trace/tree/master: Adds query origin tracing to your logs.
+* "Query Stats":https://github.com/dan-manges/query_stats/tree/master: A Rails plugin to track database queries.
 * "Query Reviewer":http://code.google.com/p/query-reviewer/: This rails plugin not only runs "EXPLAIN" before each of your select queries in development, but provides a small DIV in the rendered output of each page with the summary of warnings for each query that it analyzed.
-* "Exception Notifier":http://github.com/rails/exception_notification/tree/master: Provides a mailer object and a default set of templates for sending email notifications when errors occur in a Rails application.
-* "Exception Logger":http://github.com/defunkt/exception_logger/tree/master: Logs your Rails exceptions in the database and provides a funky web interface to manage them.
+* "Exception Notifier":https://github.com/smartinez87/exception_notification/tree/master: Provides a mailer object and a default set of templates for sending email notifications when errors occur in a Rails application.
+* "Exception Logger":https://github.com/defunkt/exception_logger/tree/master: Logs your Rails exceptions in the database and provides a funky web interface to manage them.
 
 h3. References
 

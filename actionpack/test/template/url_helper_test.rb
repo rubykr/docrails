@@ -9,7 +9,7 @@ class UrlHelperTest < ActiveSupport::TestCase
   # or request.
   #
   # In those cases, we'll set up a simple mock
-  attr_accessor :controller, :request, :_template
+  attr_accessor :controller, :request
 
   routes = ActionDispatch::Routing::RouteSet.new
   routes.draw do
@@ -24,6 +24,8 @@ class UrlHelperTest < ActiveSupport::TestCase
   include ActionDispatch::Assertions::DomAssertions
   include ActionView::Context
   include RenderERBUtils
+
+  setup :_prepare_context
 
   def hash_for(opts = [])
     ActiveSupport::OrderedHash[*([:controller, "foo", :action, "bar"].concat(opts))]

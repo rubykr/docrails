@@ -1,4 +1,5 @@
 require "cases/helper"
+require 'active_support/core_ext/object/inclusion'
 require 'models/minimalistic'
 require 'models/developer'
 require 'models/auto_id'
@@ -9,6 +10,7 @@ require 'models/company'
 require 'models/category'
 require 'models/reply'
 require 'models/contact'
+require 'models/keyboard'
 
 class AttributeMethodsTest < ActiveRecord::TestCase
   fixtures :topics, :developers, :companies, :computers
@@ -76,6 +78,7 @@ class AttributeMethodsTest < ActiveRecord::TestCase
   def test_respond_to?
     topic = Topic.find(1)
     assert_respond_to topic, "title"
+    assert_respond_to topic, "_title"
     assert_respond_to topic, "title?"
     assert_respond_to topic, "title="
     assert_respond_to topic, :title
@@ -87,6 +90,16 @@ class AttributeMethodsTest < ActiveRecord::TestCase
     assert !topic.respond_to?(:nothingness)
   end
 
+  def test_respond_to_with_custom_primary_key
+    keyboard = Keyboard.create
+    assert_not_nil keyboard.key_number
+    assert_equal keyboard.key_number, keyboard.id
+    assert keyboard.respond_to?('key_number')
+    assert keyboard.respond_to?('_key_number')
+    assert keyboard.respond_to?('id')
+    assert keyboard.respond_to?('_id')
+  end
+
   # Syck calls respond_to? before actually calling initialize
   def test_respond_to_with_allocated_object
     topic = Topic.allocate
@@ -94,6 +107,14 @@ class AttributeMethodsTest < ActiveRecord::TestCase
     assert !topic.respond_to?(:nothingness)
     assert_respond_to topic, "title"
     assert_respond_to topic, :title
+  end
+
+  # IRB inspects the return value of "MyModel.allocate"
+  # by inspecting it.
+  def test_allocated_object_can_be_inspected
+    topic = Topic.allocate
+    assert_nothing_raised { topic.inspect }
+    assert topic.inspect, "#<Topic not initialized>"
   end
 
   def test_array_content
@@ -118,22 +139,39 @@ class AttributeMethodsTest < ActiveRecord::TestCase
   end
 
   def test_read_attributes_before_type_cast_on_datetime
-    developer = Developer.find(:first)
-    if current_adapter?(:Mysql2Adapter, :OracleAdapter)
-      # Mysql2 and Oracle adapters keep the value in Time instance
-      assert_equal developer.created_at.to_s(:db), developer.attributes_before_type_cast["created_at"].to_s(:db)
-    else
-      assert_equal developer.created_at.to_s(:db), developer.attributes_before_type_cast["created_at"].to_s
+    in_time_zone "Pacific Time (US & Canada)" do
+      record = @target.new
+
+      record.written_on = "345643456"
+      assert_equal "345643456", record.written_on_before_type_cast
+      assert_equal nil, record.written_on
+
+      record.written_on = "2009-10-11 12:13:14"
+      assert_equal "2009-10-11 12:13:14", record.written_on_before_type_cast
+      assert_equal Time.zone.parse("2009-10-11 12:13:14"), record.written_on
+      assert_equal ActiveSupport::TimeZone["Pacific Time (US & Canada)"], record.written_on.time_zone
     end
+  end
 
-    developer.created_at = "345643456"
+  def test_read_attributes_after_type_cast_on_datetime
+    tz = "Pacific Time (US & Canada)"
 
-    assert_equal developer.created_at_before_type_cast, "345643456"
-    assert_equal developer.created_at, nil
+    in_time_zone tz do
+      record = @target.new
 
-    developer.created_at = "2010-03-21 21:23:32"
-    assert_equal developer.created_at_before_type_cast, "2010-03-21 21:23:32"
-    assert_equal developer.created_at, Time.parse("2010-03-21 21:23:32")
+      date_string = "2011-03-24"
+      time        = Time.zone.parse date_string
+
+      record.written_on = date_string
+      assert_equal date_string, record.written_on_before_type_cast
+      assert_equal time, record.written_on
+      assert_equal ActiveSupport::TimeZone[tz], record.written_on.time_zone
+
+      record.save
+      record.reload
+
+      assert_equal time, record.written_on
+    end
   end
 
   def test_hash_content
@@ -621,7 +659,7 @@ class AttributeMethodsTest < ActiveRecord::TestCase
   end
 
   def time_related_columns_on_topic
-    Topic.columns.select { |c| [:time, :date, :datetime, :timestamp].include?(c.type) }
+    Topic.columns.select { |c| c.type.in?([:time, :date, :datetime, :timestamp]) }
   end
 
   def serialized_columns_on_topic

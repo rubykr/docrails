@@ -34,7 +34,9 @@ module ActiveRecord
       end
 
       def insert_record(record, validate = true)
+        ensure_not_nested
         return if record.new_record? && !record.save(:validate => validate)
+
         through_record(record).save!
         update_counter(1)
         record
@@ -58,8 +60,10 @@ module ActiveRecord
           through_record
         end
 
-        def build_record(attributes)
-          record = super(attributes)
+        def build_record(attributes, options = {})
+          ensure_not_nested
+
+          record = super(attributes, options)
 
           inverse = source_reflection.inverse_of
           if inverse
@@ -93,6 +97,8 @@ module ActiveRecord
         end
 
         def delete_records(records, method)
+          ensure_not_nested
+
           through = owner.association(through_reflection.name)
           scope   = through.scoped.where(construct_join_attributes(*records))
 
