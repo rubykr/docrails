@@ -1,56 +1,55 @@
 h2. AJAX on Rails
 
-This guide covers the built-in Ajax/JavaScript functionality of Rails (and more); it will enable you to create rich and dynamic AJAX applications with ease! We will cover the following topics:
+이 안내서는 레일스에 내장되어 있는 Ajax/JavsScript 기능성을 다루고 있어서 다양하고 동적인 AJAX 어플리케이션을 쉽게 만들수 있게 해 줄 것입니다. 여기서 다룰 주제는 다음과 같습니다. 
 
-* Quick introduction to AJAX and related technologies
-* Handling JavaScript the Rails way: Rails helpers, RJS, Prototype and script.aculo.us
-* Testing JavaScript functionality
+* AJAX와 관련된 기술들에 대한 간략한 소개
+* 자바스크립트를 레일스방식으로 다루기: Rails helpers, RJS, Prototype and script.aculo.us
+* 자바스크립트 기능 테스트하기
 
 endprologue.
 
-h3. Hello AJAX - a Quick Intro
+h3. 안녕, AJAX - 간략한 소개
 
-If you are a 'show me the code' type of person, you might want to skip this part and jump to the RJS section right away. However, I would really recommend to read it - you'll need the basics of DOM, http requests and other topics discussed here to really understand Ajax on Rails.
+'show me the code'형의 사람이라면 이 부분을 건너띠고 RJS 부분으로 이동하고 싶어 할 수 있습니다. 그러나, 이 부분을 읽어 볼 것을 정말로 권하는데, 레일스에서 Ajax를 잘 이해하려면 여기서 언급되는 DOM의 기본개념, http 요청하는 방법, 그리고 기타 다른 토픽들이 필요할 것이기 때문입니다. 
 
-h4. Asynchronous JavaScript + XML
+h4. AJAX 
 
-Basic terminology, new style of creating web apps
+(= +A+ synchronous +Ja+ vaScript + +X+ ML)
 
-h4. The DOM
+Ajax의 기본 용어설명, 웹어플리케이션을 만드는 새로운 방식
 
-basics of the DOM, how is it built, properties, features, why is it central to AJAX
+h4. DOM 객체
+
+DOM 의 기본개념, DOM 이 만들어진 방법, DOM 의 속성, 특징, DOM 이 AJAX 의 핵심인 이유
 
 h4. Standard HTML communication vs AJAX
 
-How do 'standard' and AJAX requests differ, why does this matter for understanding AJAX on Rails (tie in for *_remote helpers, the next section)
+통상적인 요청과 AJAX요청의 차이점, 레일스에서 AJAX 를 이해하는데 있어서의 이러한 차이점의 중요성(다음 섹션에 언급되는 *_remote  헬퍼메소드와 연관됨)
 
 
+h3. 내장 레일스 헬퍼메소드
 
 
+레일스의 기본 자바스크립트 프레임워크는 "Prototype":http://www.prototypejs.org 입니다. Prototype 은 일반적으로 사용할 수 있는 자바스크립트 프레임워크로서 DOM 객체 조작과 AJAX 를 제공하며, 그외에도 유틸리티 함수로부터 객체지향적 구조에 이르는 자바스크립트 기능을 제공해 줌으로써 동적인 웹어프리케이션을 쉽게 개발할 수 있도록 하기 위해 만들어 졌습니다. Prototype 은 특정언어를 위해서 만들어진 것이 아니기 때문에, 이와 관련된 다수의 헬퍼메소드를 레일스가 제공해서 Prototype이 레일스 뷰 파일들과 매끄럽게 통합될 수 있도록 해줍니다.
 
-
-h3. Built-in Rails Helpers
-
-Rails' JavaScript framework of choice is "Prototype":http://www.prototypejs.org. Prototype is a generic-purpose JavaScript framework that aims to ease the development of dynamic web applications by offering DOM manipulation, AJAX and other JavaScript functionality ranging from utility functions to object oriented constructs. It is not specifically written for any language, so Rails provides a set of helpers to enable seamless integration of Prototype with your Rails views.
-
-To get access to these helpers, all you have to do is to include the prototype framework in your pages - typically in your master layout, application.html.erb - like so:
+이러한 헬퍼메소드에 접근하기 위해서 해야 할 것은 대개는 application.html.erb와 같은 웹어플리케이션의 최상위 레이아웃 파일에 Prototype 프레임워크를 아래와 같이 포함시키는 것입니다. 
 <ruby>
 javascript_include_tag 'prototype'
 </ruby>
 
-You are ready to add some AJAX love to your Rails app!
+이제 레일스 어플리케이션에 AJAX에 대한 사랑을 더해 줄 준비가 된 것입니다. 
 
-h4. The Quintessential AJAX Rails Helper: link_to_remote
+h4. 전형적인 AJAX 레일스 헬퍼메스드: link_to_remote
 
-Let's start with the the probably most often used helper: +link_to_remote+, which has an interesting feature from the documentation point of view: the options supplied to +link_to_remote+ are shared by all other AJAX helpers, so learning the mechanics and options of +link_to_remote+ is a great help when using other helpers.
+아마도 가장 많이 사용하는 헬퍼메소드인  +link_to_remote+ 로부터 시작해 봅시다. 관련 도큐먼트에 기록된 것을 볼 대 이 헬퍼메소드는 재미있는 특징을 가지고 있는데, 이 헬퍼메소드로 넘겨지는 옵션들은 모든 AJAX 헬퍼메소드들에서도 공유하게 된다는 것입니다. 따라서 이 헬퍼메소드의 옵션과 작동 기전을 배우게 되면 다른 헬퍼메소드를 사용하는데 도움이 될 것입니다.
 
-The signature of +link_to_remote+ function is the same as that of the standard +link_to+ helper:
++link_to_remote+ 함수는 표준 +link_to+ 헬퍼메소드와 그 특징이 같습니다. :
 
 <ruby>
 def link_to_remote(name, options = {}, html_options = nil)
 </ruby>
 
-And here is a simple example of link_to_remote in action:
+그리고 아래에 link_to_remote 헬퍼메소드에 대한 간단한 예제가 있습니다.
 
 <ruby>
 link_to_remote "Add to cart",
@@ -58,11 +57,11 @@ link_to_remote "Add to cart",
   :update => "cart"
 </ruby>
 
-* The very first parameter, a string, is the text of the link which appears on the page.
+* 제일 처음에 있는 매개변수는 문자열인데, 웹페이지에 나타나는 링크의 텍스트입니다.
 
-* The second parameter, the +options+ hash is the most interesting part as it has the AJAX specific stuff:
-** *:url* This is the only parameter that is always required to generate the simplest remote link (technically speaking, it is not required, you can pass an empty +options+ hash to +link_to_remote+ - but in this case the URL used for the POST request will be equal to your current URL which is probably not your intention). This URL points to your AJAX action handler. The URL is typically specified by Rails REST view helpers, but you can use the +url_for+ format too.
-** *:update* There are basically two ways of injecting the server response into the page: One is involving RJS and we will discuss it in the next chapter, and the other is specifying a DOM id of the element we would like to update. The above example demonstrates the simplest way of accomplishing this - however, we are in trouble if the server responds with an error message because that will be injected into the page too! However, Rails has a solution for this situation:
+* 두번째 매개변수는 +options+ 해쉬이며, AJAX에 관련된 기능을 가질 때 가장 재미있는 부분입니다. 
+** *:url* 이것은 가장 간단한 리모드 링크를 만들기 위해 반드시 필요한 매개변수입니다. 기술적으로는, :url 매개변수 없이 빈 해쉬를 넘길 수 있지만, 이런 경우에는 프로그래머의 의도와는 상관없이 POST 요청시에 사용되는 주소가 현재의 주소가 될 것입니다. 이 URl 주소에는 AJAX 액션 핸들러의 위치를 지정해 줍니다. 대개 이 URL에는 레일스REST 뷰 헬퍼메소드를 이용해서 지정하게 되지만, +url_for+ 형태로 지정할 수도 있습니다. 
+** *:update* 기본적으로 서버로부터의 응답을 웹페이지상에 보여지기 하는데는 2가지 방법이 있습니다. 하나는 RJS에 관련된 사항하고 이것은 다음 장에서 언급할 것입니다. 다른 하나는 업데이트하고자는 하는 엘리먼트의 DOM 아이디 값을 지정하는 것입니다. 위의 예제에서는 이것에 대한 가장 간단한 방법을 소개하지만, 서버가 웹페이지에 표시될 에러 메시지로 응답을 할 때 문제가 생기게 됩니다. 그러나 레일스는 이러한 상황에 대한 해결방법을 가지고 있습니다. 
 
 <ruby>
 link_to_remote "Add to cart",
@@ -70,15 +69,15 @@ link_to_remote "Add to cart",
   :update => { :success => "cart", :failure => "error" }
 </ruby>
 
-If the server returns 200, the output of the above example is equivalent to our first, simple one. However, in case of error, the element with the DOM id +error+ is updated rather than the +cart+ element.
+서버가 200번으로 응답할 때 위의 예제는 이전의 간단한 예제와 같은 결과를 보여 줄 것입니다. 그러나, 에러가 발생할 경우에는 "cart" 엘리먼트가 아니라 "error" 아이디를 가지는 DOM 엘리먼트가 업데이트 됩니다. 
 
-** *position* By default (i.e. when not specifying this option, like in the examples before) the repsonse is injected into the element with the specified DOM id, replacing the original content of the element  (if there was any). You might want to alter this behavior by keeping the original content - the only question is where to place the new content? This can specified by the +position+ parameter, with four possibilities:
-*** +:before+ Inserts the response text just before the target element. More precisely, it creates a text node from the response and inserts it as the left sibling of the target element.
-*** +:after+ Similar behavior to +:before+, but in this case the response is inserted after the target element.
-*** +:top+ Inserts the text into the target element, before it's original content. If the target element was empty, this is equivalent with not specifying +:position+ at all.
-*** +:bottom+ The counterpart of +:top+: the response is inserted after the target element's original content.
+** *position* : 기본적으로(이전 예제와 같이 이 옵션을 명시하지 않은 때), 서버로부터의 응답은 명시된 DOM 아이디를 가진 엘리먼트에 표시되어 이전 값이 있을 경우 이를 대체하게 됩니다. 경우에 따라 해당 엘리먼트의 원래의 값을 변경하기 않도록 이러한 동작을 변경하기를 원할 수 있습니다. 여기서 문제는 새로운 값을 어디에 둘 것이냐 입니다. 바로 이때 +position+ 매개변수를 지정해서 위치를 지정할 수 있으며, 4가지 옵션을 가질 수 있습니다. 
+*** +:before+ : 서버응답 내용을 대상 엘리먼트 직전에 삽입합니다. 더 정확하게 말하면, 서버응답으로부터 텍스트 노드를 만들어서 대상 엘리먼트의 직전 형제노드로 삽입합니다. 
+*** +:after+ : +:before+ 와 비슷한 동작을 합니다만, 이 경우에는 대상 엘리먼트 이후에 서버응답이 삽입됩니다.
+*** +:top+ : 텍스트를 원본 내용 이전에 있는 대상 엘리먼트로 삽입합니다. 대상 엘리먼트가 비어 있는 경우에는 +:position+ 값을 전혀 설정하지 않은 상태와 동일하게 됩니다.
+*** +:bottom+ : +:top+ 의 반대 옵션으로 서버응답이 대상 엘리먼트의 원본 내용 다음에 삽입됩니다.
 
-A typical example of using +:bottom+ is inserting a new &lt;li&gt; element into an existing list:
++:bottom+ 옵션을 이용하는 전형적인 예는 기존 목록에 &lt;li&gt; 엘리먼트를 새로 추가하는 것입니다.
 
 <ruby>
 link_to_remote "Add new item",
@@ -87,7 +86,7 @@ link_to_remote "Add new item",
   :position => :bottom
 </ruby>
 
-** *:method* Most typically you want to use a POST request when adding a remote link to your view so this is the default behavior. However, sometimes you'll want to update (PUT) or delete/destroy (DELETE) something and you can specify this with the +:method+ option. Let's see an example for a typical AJAX link for deleting an item from a list:
+** *:method* : 뷰 템블릿에 원격 링크를 추가할 대 가장 기본적으로 POST 요청을 하게 되어 이것이 디폴트 동작이 되는 것입니다. 그러나, 경우에 따라 특정 내용을 업데이트(PUT)하거나 삭제(DELETE)하고자 할 때 +:method+ 옵션을 이용하여 명시할 수 있습니다. 특정 목록에서 하나의 항목을 삭제하기 위한 전형적인 AJAX 링크에 대한 예를 보겠습니다.
 
 <ruby>
 link_to_remote "Delete the item",
@@ -95,15 +94,15 @@ link_to_remote "Delete the item",
   :method => :delete
 </ruby>
 
-Note that if we wouldn't override the default behavior (POST), the above snippet would route to the create action rather than destroy.
+주의할 것은, 디폴트 동작(POST)을 변경하지 않을 경우 위의 코드는 삭제보다는 생성(create) 동작으로 작동하게 될 것입니다. 
 
-** *JavaScript filters* You can customize the remote call further by wrapping it with some JavaScript code. Let's say in the previous example, when deleting a link, you'd like to ask for a confirmation by showing a simple modal text box to the user. This is a typical example what you can accomplish with these options - let's see them one by one:
-*** +:confirm+ =&gt; +msg+ Pops up a JavaScript confirmation dialog, displaying +msg+. If the user chooses 'OK', the request is launched, otherwise canceled.
-*** +:condition+ =&gt; +code+ Evaluates +code+ (which should evaluate to a boolean) and proceeds if it's true, cancels the request otherwise.
-*** +:before+ =&gt; +code+ Evaluates the +code+ just before launching the request. The output of the code has no influence on the execution. Typically used show a progress indicator (see this in action in the next example).
-*** +:after+ =&gt; +code+ Evaluates the +code+ after launching the request. Note that this is different from the +:success+ or +:complete+ callback (covered in the next section) since those are triggered after the request is completed, while the code snippet passed to +:after+ is evaluated after the remote call is made. A common example is to disable elements on the page or otherwise prevent further action while the request is completed.
-*** +:submit+ =&gt; +dom_id+ This option does not make sense for +link_to_remote+, but we'll cover it for the sake of completeness. By default, the parent element of the form elements the user is going to submit is the current form - use this option if you want to change the default behavior. By specifying this option you can change the parent element to the element specified by the DOM id +dom_id+.
-*** +:with+ &gt; +code+ The JavaScript code snippet in +code+ is evaluated and added to the request URL as a parameter (or set of parameters). Therefore, +code+ should return a valid URL query string (like "item_type=8" or "item_type=8&sort=true"). Usually you want to obtain some value(s) from the page - let's see an example:
+** *JavaScript filters* : 자바스크립트 코드로 감싸게 되면 원격 호출을 변경할 수 있습니다. 예를 들어 이전 예제에서, 특정 링크를 없애고자 할 때, 유저에게 간단한 텍스트 박스를 보여주어 확인을 요구할 수 있습니다. 이것은 전형적인 예로서 이 옵션을 이용하여 수행할 수 있습니다. 하나씩 알아보도록 하겠습니다.
+*** +:confirm+ =&gt; +msg+ : 자바스크립트 확인 대화창을 띄워 +msg+ 를 보여줍니다. 유저가 'OK'를 선택하면 요청 작업이 진행되고 그렇지 않으면 취소됩니다.
+*** +:condition+ =&gt; +code+ : 논리값을 반환하는 +code+ 를 실해하여 참이면 작업을 진행하고 그렇지 않으면 취소합니다.
+*** +:before+ =&gt; +code+ : 요청을 진행하기 직전에 +code+ 를 실행합니다. 해당 코드의 결과는 호출에 영향을 미치지 않습니다. 진행상황을 표시하기 위해서 흔히 사용되며 다음 예제에서 이러한 동작을 알 수 있습니다. 
+*** +:after+ =&gt; +code+ : 요청을 실행한 후에 +code+ 를 평가하게 됩니다. 다음 섹션에서 다루게 되겠지만 이것은 +:success+ 나 +:complet+ 콜백과는 다릅니다. 이것들은 요청이 완료된 후에 실행되지만, +:after+ 로 넘겨지는 코드는 원격 호출 된 직후에 실행된다는 것에 주목해야 합니다. 일반적인 예를 들면 웹페이지의 엘리먼트를 사용하지 못하게 하거나 요청이 완료되는 시점에서 더이상 동작을 하지 못하도록 할 경우입니다. 
+*** +:submit+ =&gt; +dom_id+ : 이 옵션은 +link_to_remote+ 헬퍼메소드에 해당되지 않지만 모든 것을 언급한다는 의미에서 여기서 다루기로 하겠습니다. 디폴트로, 유저가 서밋하는 폼 엘리먼트의 상위 엘리먼트는 현재의 폼이 됩니다. 이 때 디폴트 동작을 변경하고자 할 때 이 옵션을 사용하면 됩니다. 이 옵션을 지정하게 되면, DOM 아이디값 +dom_id+ 을 지정해서 상위 엘리먼트를 변경할 수 있게 됩니다. 
+*** +:with+ &gt; +code+ : +code+ 값 안에 할당된 자바스크립트 코드가 평가된 후 요청된 URL에 매개변수(들)로 추가됩니다. 그러므로 +code+ 값은 유효한 URL 쿼리문자열을 반환하게 됩니다(like "item_type=8" or "item_type=8&sort=true"). 대개는 웹페이시에서 값들을 얻게 됩니다. 자 예제를 보겠습니다. 
 
 <ruby>
 link_to_remote "Update record",
@@ -112,23 +111,23 @@ link_to_remote "Update record",
   :with => "'status=' + 'encodeURIComponent($('status').value) + '&completed=' + $('completed')"
 </ruby>
 
-This generates a remote link which adds 2 parameters to the standard URL generated by Rails, taken from the page (contained in the elements matched by the 'status' and 'completed' DOM id).
+이 코드는 웹페이지내의 'status'와 'compeleted' DOM 아이디를 가지는 엘리먼트로부터 가져 온 2개의 매개변수를 레일스가 만들어 주는 표준 URL에 추가하여 원격 링크를 만들어 줍니다. 
 
-** *Callbacks* Since an AJAX call is typically asynchronous, as it's name suggests (this is not a rule, and you can fire a synchronous request - see the last option, +:type+) your only way of communicating with a request once it is fired is via specifying callbacks. There are six options at your disposal (in fact 508, counting all possible response types, but these six are the most frequent and therefore specified by a constant):
-*** +:loading:+ =&gt; +code+ The request is in the process of receiving the data, but the transfer is not completed yet.
-*** +:loaded:+ =&gt; +code+ The transfer is completed, but the data is not processed and returned yet
-*** +:interactive:+ =&gt; +code+ One step after +:loaded+: The data is fully received and being processed
-*** +:success:+ =&gt; +code+ The data is fully received, parsed and the server responded with "200 OK"
-*** +:failure:+ =&gt; +code+ The data is fully received, parsed and the server responded with *anything* but "200 OK" (typically 404 or 500, but in general with any status code ranging from 100 to 509)
-*** +:complete:+ =&gt; +code+ The combination of the previous two: The request has finished receiving and parsing the data, and returned a status code (which can be anything).
-*** Any other status code ranging from 100 to 509: Additionally you might want to check for other HTTP status codes, such as 404. In this case simply use the status code as a number:
+** *Callbacks* : AJAX 호출은 보통 비동기화 되어 일어나지만, 그 이름이 암시하는 바와 같이 (반드시 그런 것은 아니지만, 마지막 옵션인 +:type+ 을 설정하여 요청을 동기화할 수 있습니다) 특정 요청이 시작된 후 해당 요청과 통신할 수 있는 유일한 방법은 콜백을 지정하는 것입니다. 재량에 따라 6개의 옵션을 있을 수 있습니다(모드 가능성 있는 응답 형태를 계산해 보면 508개나 되지만 언급한 6개만이 가장 자주 사용되어 상수로 정의하게 되었습니다). 
+*** +:loading:+ =&gt; +code+ : 요청이 데이타를 받는 중에 있지만 완료되지 않은 상태입니다. 
+*** +:loaded:+ =&gt; +code+ : 요청으로부터 데이타 이동이 완료되었지만 아직 처리되지 못하여 반환되지 않은 상태입니다.
+*** +:interactive:+ =&gt; +code+ : +:loaded+ 직후 단계로서 데이타 이동이 완료되어 처리된 상태입니다. 
+*** +:success:+ =&gt; +code+ : 서버로 데이타 이동이 완료되어 처리된 후에 "200 OK" 응답을 보낸 상태입니다.
+*** +:failure:+ =&gt; +code+ : 서버로 데이타 이동이 완료되어 치리된 후에 "200 OK" 외의 값으로 응답을 보낸 상태입니다.(대개는 404 또는 500 값이지만 일반적으로 100에서 509까지의 상태 코드값을 가질 수 있습니다)
+*** +:complete:+ =&gt; +code+ : 이전 두개의 옵션을 합한 상태입니다. 즉, 요청이 완료되어 데이타가 분석되고 상태 코드값을 반환한 상태입니다(상태 코드값은 어떠한 값이어도 됩니다).
+*** 기타 다른 상태 코드값(100-509) : 404 와 같은 기타 HTTP 상태 코드값을 점검할 경우에는 상태 코드값을 숫자로 사용하면 됩니다. 
 <ruby>
 link_to_remote "Add new item",
   :url => items_url,
   :update => "item_list",
   404 => "alert('Item not found!')"
 </ruby>
-Let's see a typical example for the most frequent callbacks, +:success+, +:failure+ and +:complete+ in action:
+가장 자주 사용하는 콜백인  +:success+, +:failure+, +:complete+ 가 동작하는 전형적인 예제를 봅시다. 
 <ruby>
 link_to_remote "Add new item",
   :url => items_url,
@@ -138,22 +137,24 @@ link_to_remote "Add new item",
   :success => "display_item_added(request)",
   :failure => "display_error(request)"
 </ruby>
-** *:type* If you want to fire a synchronous request for some obscure reason (blocking the browser while the request is processed and doesn't return a status code), you can use the +:type+ option with the value of +:synchronous+.
-* Finally, using the +html_options+ parameter you can add HTML attributes to the generated tag. It works like the same parameter of the +link_to+ helper. There are interesting side effects for the +href+ and +onclick+ parameters though:
-** If you specify the +href+ parameter, the AJAX link will degrade gracefully, i.e. the link will point to the URL even if JavaScript is disabled in the client browser
-** +link_to_remote+ gains it's AJAX behavior by specifying the remote call in the onclick handler of the link. If you supply +html_options[:onclick]+ you override the default behavior, so use this with care!
 
-We are finished with +link_to_remote+. I know this is quite a lot to digest for one helper function, but remember, these options are common for all the rest of the Rails view helpers, so we will take a look at the differences / additional parameters in the next sections.
+** *:type* : 어떤 분명치 않은 이유로 해서 요청을 동기화하고 싶을 때(요청이 처리되고 상태 값을 반환하지 않은 상태에서 브라우져를 사용할 수 없게 해야 하는 경우) 이 옵션을 +:synchronous+ 로 설정해서 이용할 수 있습니다. 
 
-h4. AJAX Forms
+* 마지막으로 +html_options+ 매개변수를 이용해서, 최종적으로 만들어지는 태그에 HTML 속성을 추가할 수 있습니다. 이것은 +link_to+ 헬퍼메소드의 동일한 매개변수와 같이 동작을 합니다. 그러나 +href+ 와 +onclick+ 매개변수에 대해서는 재미있는 부대효과가 있습니다. 
+** +href+ 매개변수를 지정할 경우, 클라이언트 브라우져에서 자바스크립트가 작동하지 않더라도 AJAX 링크가 멋지게 깨지면서 링크는 지정한 주소로 연결이 가능하게 됩니다.  
+** +link_to_remote+ 는 링크의 onclick 핸들러에 원격 콜을 지정해 두게 되면 AJAX 동작을 하게 됩니다. +html_options[:onclick]+ 을 설정하면 디폴트 동작을 변경하게 되므로 주의를 기울려야 합니다.
 
-There are three different ways of adding AJAX forms to your view using Rails Prototype helpers. They are slightly different, but striving for the same goal: instead of submitting the form using the standard HTTP request/response cycle, it is submitted asynchronously, thus not reloading the page. These methods are the following:
+이제 +link_to_remote+ 대한 설명을 마칩니다. 하나의 헬퍼함수에 대해서 소화하기에는 많은 양이지만 기억할 것은 이 옵션들은 레일스 뷰 헬퍼메소들에 대해서 일반적으로 적용할 수 있어서 다음 섹션에서 차이점과 추가된 매개변수들에 대해서 알아 보도록 하겠습니다. 
 
-* +remote_form_for+ (and it's alias +form_remote_for+) is tied to Rails most tightly of the three since it takes a resource, model or array of resources (in case of a nested resource) as a parameter.
-* +form_remote_tag+ AJAXifies the form by serializing and sending it's data in the background
-* +submit_to_remote+ and +button_to_remote+ is more rarely used than the previous two. Rather than creating an AJAX form, you add a button/input
+h4. AJAX 폼
 
-Let's see them in action one by one!
+Prototype 헬퍼메소드를 이용해서 뷰템플릿에 AJAX 폼을 추가하는데는 3가지 방법이 있습니다. 약간씩의 차이점이 있지만 결국은 같은 목적을 위한 것입니다. 즉, 표준 HTTP 요청/응답 주기를 이용해서 서밋(submit)하는 대신에, 웹페이지를 다시 로딩하지 않고 비동기적으로 서밋하게 됩니다. 이러한 메소드는 다음과 같습니다.
+
+* +remote_form_for+ (and it's alias +form_remote_for+) 는 매개변수로서 하나의 리소스, 즉, 모델이나 리소스배열(중첩리소스)을 사용하기 때문에 3가지 방법 중에 가장 밀접하게 레일스에 연결됩니다.
+* +form_remote_tag+ 는 백그라운드에서 폼 데이터를 시리얼로 보냄으로서써 폼을 AJAX화 합니다. 
+* +submit_to_remote+ 와 +button_to_remote+ 는 이전 두개의 방법보다는 더 자주 사용되지는 않습니다. AJAX 폼을 만들기보다는 버튼이나 input 컴포넌트를 추가해 줍니다. 
+
+작동되는 것은 하나씩 알아 보도록 합시다!
 
 h5. +remote_form_for+
 
@@ -161,31 +162,33 @@ h5. +form_remote_tag+
 
 h5. +submit_to_remote+
 
-h4. Observing Elements
+
+h4. 엘리먼트에 이벤트 핸들러를 등록하기
 
 h5. +observe_field+
 
 h5. +observe_form+
 
-h4. Calling a Function Periodically
+
+h4. 주기적으로 함수 호출하기
 
 h5. +periodically_call_remote+
 
 
-h4. Miscellaneous Functionality
+h4. 기타 함수
 
 h5. +remote_function+
 
 h5. +update_page+
 
 
-h3. JavaScript the Rails way: RJS
+h3. 레일스 방식(RJS)으로 자바스크립트 코딩하기
 
-In the last section we sent some AJAX requests to the server, and inserted the HTML response into the page (with the +:update+ option). However, sometimes a more complicated interaction with the page is needed, which you can either achieve with JavaScript... or with RJS! You are sending JavaScript instructions to the server in both cases, but while in the former case you have to write vanilla JavaScript, in the second you can code Rails, and sit back while Rails generates the JavaScript for you - so basically RJS is a Ruby DSL to write JavaScript in your Rails code.
+지난 섹션에서, 서버에 몇가지 AJAX 요청을 보내고 ( +:update+ 옵션을 이용해서) 웹페이지에 HTML응답을 삽입한 바 있습니다. 그러나, 때로는 좀 더 복잡한 동작을 웹페이지에 적용해야 할 경우가 필요한데, 바로 이런 경우에 자바스크립트나 RJS를 이용할 수 있습니다. 두 경우 모두에서 서버로 자바스크립트 명령을 보내게 되는데, 전자의 경우에는 바닐라 자바스크립트를, 후자의 경우는 레일스로 코딩을 하고 잠시 레일스가 자바스크립트를 만들 때까지 기다리게 됩니다. 그것은 기본적으로 RJS가 루비 DSL이어서 레일스 코드내에 자바스크립트 코드를 삽입하기 때문입니다.  
 
-h4. JavaScript without RJS
+h4. RJS를 사용하지 않고 자바스크립트 코딩하기
 
-First we'll check out how to send JavaScript to the server manually. You are practically never going to need this, but it's interesting to understand what's going on under the hood.
+먼저 서버로 자바스크립트를 수동으로 보내는 방밥을 알아볼 것입니다. 실제로는 이런 경우는 없겠지만 어떤 상황이 일어나고 있는지를 이애해 두는 것은 재미있는 일입니다. 
 
 <ruby>
 def javascript_test
@@ -194,13 +197,13 @@ def javascript_test
 end
 </ruby>
 
-(Note: if you want to test the above method, create a +link_to_remote+ with a single parameter - +:url+, pointing to the +javascript_test+ action)
+(주의: 바로 위의 메소드를 점검하기 위해서는, +javascript_test+ 액션으로 연결되는 +:url+ 옵션을 설정해서 +link_to_remote+ 를 만들어야 합니다.)
 
-What happens here is that by specifying the Content-Type header variable, we instruct the browser to evaluate the text we are sending over (rather than displaying it as plain text, which is the default behavior).
+위의 메소드에서는 헤더변수인 Content-Type을 지정해서 브라우져가 전송되는 텍스트를 단순한 텍스트로 보지 주지 않고 자바스크립트 디폴트 동작을 하도록 지시하게 됩니다.
 
-h4. Inline RJS
+h4. 인라인 RJS
 
-As we said, the purpose of RJS is to write Ruby which is then auto-magically turned into JavaScript by Rails. The above example didn't look too Ruby-esque so let's see how to do it the Rails way:
+언급했던 바와 같이, RJS의 목적은 레일스가 자동으로 자바스크립트로 변환시켜주는 루비 코딩을 하는 것입니다. 위의 예제는 너무 루비식이 아니라서 레일스식으로 어떻게 코딩하는 알아 보겠습니다. 
 
 <ruby>
 def javascript_test
@@ -210,13 +213,13 @@ def javascript_test
 end
 </ruby>
 
-The above code snippet does exactly the same as the one in the previous section - going about it much more elegantly though. You don't need to worry about headers,write ugly JavaScript code into a string etc. When the first parameter to +render+ is +:update+, Rails expects a block with a single parameter (+page+ in our case, which is the traditional naming convention) which is an instance of the JavaScriptGenerator:"http://api.rubyonrails.org/classes/ActionView/Helpers/PrototypeHelper/JavaScriptGenerator/GeneratorMethods.html" object. As it's name  suggests, JavaScriptGenerator is responsible for generating JavaScript from your Ruby code. You can execute multiple method calls on the +page+ instance - it's all turned into JavaScript code and sent to the server with the appropriate Content Type, "text/javascript".
+위의 코드 부분은 이전 섹션의 것과 정확히 동일하지만 훨씬 우아하게 코딩한 것입니다. 헤더부분에 대해서 걱정할 필요없어서 자바스크립트 코드를 문자열로 넣을 필요가 없습니다. +render+ 의 첫번째 매개변수가 +:update+ 일 경우, 레일스는 블록에서 하나의 매개변수를 필요로 합니다. 여기서는 +page+ 가 이에 해당되며 전통적인 명명규칙을 따르며 "JavaScriptGenerator":http://api.rubyonrails.org/classes/ActionView/Helpers/PrototypeHelper/JavaScriptGenerator/GeneratorMethods.html 객체의 인스턴스입니다.  이름에서 알 수 있듯이, JavaScriptGenerator는 로비 코드에서 자바스크립트 코드를 만들어 냅니다. +page+ 인스턴스에 대해서 메소드 호출을 여러번 할 수 있습니다. 모두 자바스크립트로 변환되어 적절한 Content Type, 즉, "text/javascript"형태로써 서버로 보내지게 됩니다. 
 
-h4. RJS Templates
+h4. RJS 템플릿
 
-If you don't want to clutter your controllers with view code (especially when your inline RJS is more than a few lines), you can move your RJS code to a template file. RJS templates should go to the +/app/views/+ directory, just as +.html.erb+ or any other view files of the appropriate controller, conventionally named +js.rjs+.
+인라인 RJS가 한줄 이상인 경우와 같이 컨트롤러가 뷰 코드로 너저분해지기를 원치 않는다면, RJS 코드를 뷰 템플릿 파일로 옮길 수 있습니다. 이 때 RJS 템플릿은 +/app/views/+ 디렉토리로 이동해야 하며, 해당 컨트롤러의 +.html.erb+ 이나 다른 뷰 파일 형태, 대개는 +js.rjs+ 파일 형태를 가지게 됩니다. 
 
-To rewrite the above example, you can leave the body of the action empty, and create a RJS template named +javascript_test.js.rjs+, containing the following line:
+위의 예제를 다시 작성하면, 액션 코드부분을 비워두고 +javascript_test.js.rjs+ 라는 이름으로 RJS 템플릿 파일을 만들고 아래의 코드를 폼함시켜 둡니다. 
 
 <ruby>
 page.alert "Hello from inline RJS"
@@ -224,13 +227,13 @@ page.alert "Hello from inline RJS"
 
 h4. RJS Reference
 
-In this section we'll go through the methods RJS offers.
+이 섹션에서는 RJS가 제공하는 메소드를 알아 보겠습니다. 
 
-h5. JavaScriptGenerator Methods
+h5. JavaScriptGenerator 메소드
 
-h6. DOM Element Manipulation
+h6. DOM 엘리먼트 다루기
 
-It is possible to manipulate multiple elements at once through the +page+ JavaScriptGenerator instance. Let's see this in action:
++page+ JavascriptGenerator 인스턴스를 이용해서 한번 여러 개의 엘리먼트를 다룰 수 있습니다. 실제 코드를 보도록 하겠습니다. 
 
 <ruby>
 page.show :div_one, :div_two
@@ -239,99 +242,98 @@ page.remove :div_one, :div_two, :div_three
 page.toggle :other_div
 </ruby>
 
-The above methods (+show+, +hide+, +remove+, +toggle+) have the same semantics as the Prototype methods of the same name. You can pass an arbitrary number (but at least one) of DOM ids to these calls.
+위의 메소드(+show+, +hide+, +remove+, +toggle+)는 Prototype과 동일한 메소드와 문법구조를 가집니다. 이 때 적어도 한개 이상의 DOM 아이디를 매개변수로 넘겨주어야 합니다. 
 
+h6. 컨텐츠 삽입과 교체
 
-h6. Inserting and Replacing Content
-
-You can insert content into an element on the page with the +insert_html+ method:
++insert_html+ 메소드를 사용해서 특정 웹페이지 상의 한 엘리먼트에 컨텐츠를 삽입할 수 있습니다. 
 
 <ruby>
 page.insert_html :top, :result, '42'
 </ruby>
 
-The first parameter is the position of the new content relative to the element specified by the second parameter, a DOM id.
+두번째 매개변수의 DOM 아이디를 가진 엘리먼트의 상대적인 위치를 첫번째 매개변수로 지정해서 새로운 컨텐츠를 넘기게 됩니다.
 
-Position can be one of these four values:
+상대적인 위치는 다음의 4가지 값 중에 하나를 가질 수 있습니다. 
 
-*** +:before+ Inserts the response text just before the target element.
-*** +:after+ The response is inserted after the target element.
-*** +:top+ Inserts the text into the target element, before it's original content.
-*** +:bottom+ The counterpart of +:top+: the response is inserted after the target element's original content.
+*** +:before+ : 대상 엘리먼트 직전에 서버 응답 텍스트를 삽입합니다.
+*** +:after+ : 대상 엘리먼트 직후에 서버 응답 텍스트를 삽입합니다.
+*** +:top+ : 대상 엘리먼트의 원본 직전에 텍스트를 삽입합니다. 
+*** +:bottom+ (+:top+ 의 반대 옵션) : 대상 엘리먼트의 원본 직후에 응답을 삽입합니다. 
 
-The third parameter can either be a string, or a hash of options to be passed to ActionView::Base#render - for example:
+세번째 매개변수는 문자열이거나 ActionView::Base#render 에 넘겨주는 해쉬형태의 옵션일 수 있습니다. 예를 들면 ...
 
 <ruby>
 page.insert_html :top, :result, :partial => "the_answer"
 </ruby>
 
-You can replace the contents (innerHTML) of an element with the +replace_html+ method. The only difference is that since it's clear where should the new content go, there is no need for a position parameter - so +replace_html+ takes only two arguments,
-the DOM id of the element you wish to modify and a string or a hash of options to be passed to ActionView::Base#render.
++replace_htmel+ 메소드를 이용해서 특정 엘리먼트의 내용(innerHTML)을 교체할 수 있습니다. 유일한 차이점이라면 새로운 내용이 위치한 곳이 분면하기 대문에 위치 매개변수가 필요없다는 것입니다. 그래서 +replace_html+ 은 2개의 인수만 필요하며, 이들 인수는 변경하고자 하는 엘리먼트의 DOM 아이디와 ActionView::Base#render로 넘겨주는 문자열이나 해쉬형의 옵션입니다. 
 
-h6. Delay
+h6. 실행지연
 
-You can delay the execution of a block of code with +delay+:
+
++dealy+ 이용하여 코드블럭의 실행을 지연시킬 수 있습니다. 
 
 <ruby>
 page.delay(10) { page.alert('Hey! Just waited 10 seconds') }
 </ruby>
 
-+delay+ takes one parameter (time to wait in seconds) and a block which will be executed after the specified time has passed - whatever else follows a +page.delay+ line is executed immediately, the delay affects only the code in the block.
++delay+ 는 초단위의 지연시간과 지정 시간만큼 지연해서 실행할 코드블럭을 매개변수로 받습니다. 블럭에 지정된 코드만이 지연되고 +page.delay+ 라인 이후에 오는 모든 코드들은 즉작적으로 실행됩니다. 
 
-h6. Reloading and Redirecting
+h6. 웹페이지 다시 로딩하기와 리디렉트하기
 
-You can reload the page with the +reload+ method:
++reload+ 메소드를 이용하여 웹페이지를 다시 로드할 수 있습니다. 
 
 <ruby>
 page.reload
 </ruby>
 
-When using AJAX, you can't rely on the standard +redirect_to+ controller method - you have to use the +page+'s instance method, also called +redirect_to+:
+AJAX를 사용할 때, 표준 +redirect_to+ 컨트롤러 메소드를 사용할 수 없습니다. 대신에 +page+ 의 인트턴스 메소드인 동일한 이름을 가진 +redirect_to+ 를 사용해야 합니다.
 
 <ruby>
 page.redirect_to some_url
 </ruby>
 
-h6. Generating Arbitrary JavaScript
+h6. 원하는 자바스크립트를 생성하기
 
-Sometimes even the full power of RJS is not enough to accomplish everything, but you still don't want to drop to pure JavaScript. A nice golden mean is offered by the combination of +<<+, +assign+ and +call+ methods:
+때때로 RJS의 강력한 기능에도 불구하고 모든 것을 다할 수 없습니다. 그러나 여전히 순수 자바스크립트 코딩을 하고 싶지 않을 경우에, 멋진 대안이 있습니다. +<<+, +assign+ 그리고 +call+ 메소드를 사용하는 것입니다. 
 
 <ruby>
   page << "alert('1+1 equals 3')"
 </ruby>
 
-So +<<+ is used to execute an arbitrary JavaScript statement, passed as string to the method. The above code is equivalent to:
++<<+ 를 이용해서 문자열안에 자바스크립트를 넘겨 주어 실행할 수 있습니다. 위의 코드는 다음 코드와 동일합니다. 
 
 <ruby>
   page.assign :result, 3
   page.call   :alert, '1+1 equals ' + result
 </ruby>
 
-+assign+ simply assigns a value to a variable. +call+ is similar to +<<+ with a slightly different syntax: the first parameter is the name of the function to call, followed by the list of parameters passed  to the function.
++assign+ 은 그냥 변수에 값을 할당합니다. +call+ 는 +<<+ 와 비슷하지만 약간 다른 문법을 사용합니다. 첫번째 매개변수는 호출하려는 함수의 이름이고, 다음에 오는 매개변수 리스트는 함수의 매개변수로 넘겨집니다. 
 
-h6. Class Proxies
+h6. 클랙스 프록시
 
-h5. Element Proxies
+h5. 엘리먼트 프록시
 
-h5. Collection Proxies
+h5. 컬렉션 프록시
 
-h5. RJS Helpers
+h5. RJS 헬퍼메소드 
 
 
 
-h3. I Want my Yellow Thingy: Quick overview of Script.aculo.us
+h3. I Want my Yellow Thingy: Script.aculo.us의 간단한 개요
 
-h4. Introduction
+h4. 소개
 
-h4. Visual Effects
+h4. 시각적 효과
 
 h4. Drag and Drop
 
 
 
-h3. Testing JavaScript
+h3. 자바스크립트 테스트하기
 
-JavaScript testing reminds me the definition of the world 'classic' by Mark Twain: "A classic is something that everybody wants to have read and nobody wants to read." It's similar with JavaScript testing: everyone would like to have it, yet it's not done by too much developers as it is tedious, complicated, there is a proliferation of tools and no consensus/accepted best practices, but we will nevertheless take a stab at it:
+자바스크립트 테스트하기란 말은 마크 트웨인의 "Classic"이란 책을 생각나게 합니다. "클래식은 모든 사람이 이미 읽은 책이기를 바라지만 어느 누구도 읽고 싶어하지 않습니다. 자바스크립트 테스트하기도 비슷합니다. 즉, 모두가 자바스크립트 테스트하기를 원하지만 너무 지루하고 복잡하여 많은 개발자들이 하지 않는다 것입니다. 이에 대한 툴들이 많이 나오고 있고 누구나가 인정하는 최상의 방법이 없지만 다음과 같이 시도하고 있습니다. 
 
 * (Fire)Watir
 * Selenium
@@ -339,4 +341,4 @@ JavaScript testing reminds me the definition of the world 'classic' by Mark Twai
 * Cucumber+Webrat
 * Mention stuff like screw.unit/jsSpec
 
-Note to self: check out the RailsConf JS testing video
+노트 남기기 : RailsConf JS testing video 확인하기
